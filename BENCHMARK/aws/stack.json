@@ -1,0 +1,13 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+  "Description" : "Server benchmark stack",
+  "Resources" : {
+    "VariantServer" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "InstanceType": "t2.micro",
+        "ImageId" : "ami-08ff1c34bc515cbc6"
+      }
+    }
+  }
+}
