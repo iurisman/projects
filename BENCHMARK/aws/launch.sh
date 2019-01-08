@@ -27,6 +27,7 @@ server_pub_ip=$( \
 
 echo "Starting Variant Server at ${server_pub_ip}:5377/variant"
 
-ssh -i ~/.ssh/aws.pem ubuntu@$server_pub_ip 'nohup variant-server-0.9.3/bin/variant.sh start > /dev/null 2>&1 &'
+ssh -i ~/.ssh/aws.pem ubuntu@$server_pub_ip 'nohup variant-server-0.9.3/bin/variant.sh start > /tmp/nohup.out 2> /tmp/nohup.err &'
 sleep 20
-echo "$(curl -s ${server_pub_ip}:5377/variant)"
+echo "Variant Server Responded: $(curl -s ${server_pub_ip}:5377/variant)"
+
