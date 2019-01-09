@@ -15,5 +15,7 @@ sbt package
 rm -rf aws/tmp
 mkdir aws/tmp aws/tmp/lib
 cp target/scala-*/benchmark_*.jar aws/tmp
-find lib_managed -name '*.jar' -exec cp {} aws/tmp/lib \;
+# Take only the libs we actually need.  (Nothing for now)
+#find lib_managed -name '*.jar' -exec cp {} aws/tmp/lib \;
+cp aws/runClient.sh aws/tmp
 (cd aws/tmp; zip -r ../benchmark.zip *)
