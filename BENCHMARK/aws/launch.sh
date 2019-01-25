@@ -42,6 +42,7 @@ launch_server () {
 
 #
 # Launch given number of clients and start benchmark process on each.
+#
 launch_client () {
 
     client_iid=$( \
@@ -79,6 +80,11 @@ launch_client () {
 
 #launch_server
 
-for ((n=0;n<$client_count;n++)); do launch_client   
-done   
+# for ((n=0;n<$client_count;n++)); do launch_client   
+# done   
 
+# Write the 
+aws sqs send-message \
+    --queue-url https://sqs.us-east-2.amazonaws.com/071311804336/benchmark \
+    --message-body 1234567
+    
