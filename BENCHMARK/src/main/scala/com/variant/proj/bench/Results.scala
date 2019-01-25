@@ -34,7 +34,7 @@ class Results() {
 	 */
 	def print {
 		for ( (op, queue) <- map) {
-			println(s"***** ${op} *****")
+			println(s"Results for [${op}]")
 			println("  " + queue)
 		}
 	}

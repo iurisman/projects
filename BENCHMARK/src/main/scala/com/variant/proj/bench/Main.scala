@@ -27,6 +27,7 @@ object Main extends App {
 	
 	val OP_CREATE_SESSION = "Create Session"
 	val OP_TARGET_SESSION = "Target Session"
+	val OP_COMMIT_REQUEST = "Commit State Request"
 	
 	val rand = new java.util.Random(System.currentTimeMillis)
 
@@ -70,12 +71,26 @@ object Main extends App {
 						(ssn, OP_TARGET_SESSION)
 					},
 					ref => {
+						log.debug("Committing request for state1")
+						val ssn = ref.asInstanceOf[Session]
+						val state1 = ssn.getSchema.getState("state1").get
+						ssn.getStateRequest.get.commit()
+						(ssn, OP_COMMIT_REQUEST)
+					},
+					ref => {
 						log.debug("Targeting session for state2")
 						val ssn = ref.asInstanceOf[Session]
 						val state2 = ssn.getSchema.getState("state2").get
 						ssn.targetForState(state2)
 						(ssn, OP_TARGET_SESSION)
-					}
+					},
+					ref => {
+						log.debug("Committing request for state2")
+						val ssn = ref.asInstanceOf[Session]
+						val state1 = ssn.getSchema.getState("state1").get
+						ssn.getStateRequest.get.commit()
+						(ssn, OP_COMMIT_REQUEST)
+					},
 				)
 		)
 	
@@ -98,13 +113,24 @@ object Main extends App {
     for (i <- 0 until parallelism) {
       futures(i) = Future {
       	blocking {
+      		
+      		val nextStepIx = step % steps(i).length 
+	        
+	        // Do the step
       		val start = System.currentTimeMillis
-	        val (baton, op) = steps(i)(step)(batons(i))
+	        val (baton, op) = steps(i)(nextStepIx)(batons(i))
 	        val elapsed = System.currentTimeMillis - start
-	        if (elapsed > 1000) throw new RuntimeException("Method took too long")
+	        
+	        // If step took too long, cancel everything. 
+	        if (elapsed > maxWaitSecs* 1000) {
       		// Cancel the run...
-	 				results.add(op, elapsed.toInt)
-	        batons(i) = baton;
+	        	throw new RuntimeException("Method took too long")
+	        }
+
+      		//  If we're circling back to step 0, re-initialize the baton to connection.
+      		batons(i) = if ((nextStepIx + 1) == steps(i).length) conn else baton
+
+      		results.add(op, elapsed.toInt)
       	}
       }
     }
@@ -120,12 +146,12 @@ object Main extends App {
 
 				f.value.get match {
       		case Success(_) => 
-      			println("**** Success after " + elapsedMillis + " millis")
+      			//println("**** Success after " + elapsedMillis + " millis")
   	    	
       		case Failure(t) => 
-      			log.error("Failure " + t.getMessage + " in " + elapsedMillis + " millis") 
+      			log.error("Failure in future", t)
+      			// cancel run!
    	  	}
-
     	}
     	catch {
     		case tex: TimeoutException => cancelRun
