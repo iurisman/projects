@@ -40,7 +40,7 @@ object Main extends App {
 	// Externalize these
 	val maxWaitMillis = 1000 // If a step takes too long, either parallelism is too high or the server
                             // isn't keeping up.
-	val runLenSecs  = 10     // How many steps to run? Each step is given 1 sec.
+	val runLenSecs  = 30     // How many steps to run? Each step is given 1 sec.
 	val parallelism = 2     // Degree of parallelism at each step.
 
 	val log = LoggerFactory.getLogger(getClass)
@@ -145,7 +145,6 @@ object Main extends App {
 
 	// single threaded execution context
 	val tpool = Executors.newFixedThreadPool(parallelism)
-	implicit val context = ExecutionContext.fromExecutor(tpool)
   
 	// Steps are initialized with the connection
 	//val batons = new Array[AnyRef](parallelism)
@@ -157,46 +156,45 @@ object Main extends App {
  	// Kick off parallelism number of threads
 	for (i <- 0 until parallelism) {
   	
-		val thread = Future {
+		tpool.execute ( 
+			new Runnable { 
 			
-			var baton: AnyRef = conn
-
-	   	// Do the steps for the given period of time.
-			// Both dims of the steps array are treated circularly, i.e. if parallelism is greater than
-			// the length of the first dimension (outer array), the index wraps around. Likewise, if
-			// the number of runs is greater than an inner array, the index wraps around and the caller
-			// starts through the same steps all over.
-			for (step <- 0 to Int.MaxValue) {
-  	   	
-				blocking {
-      		
-					val stepsIx = i % steps.length
-      		 	val stepIx = step % steps(stepsIx).length 
-	        
-					val start = System.currentTimeMillis
-					val (nextBaton, op) = steps(stepsIx)(stepIx)(baton)
-					val elapsed = System.currentTimeMillis - start
-	        
-					// If step took too long, cancel everything. 
-					if (elapsed > maxWaitMillis) cancelRun
-
-	      		//  If we're circling back to step 0, re-initialize the baton to connection.
-   	   		baton = if ((stepIx + 1) == steps(stepsIx).length) conn else nextBaton
-
-     		 		results.add(op, elapsed.toInt)
-				}
-      	}
-      }
+				override def run {
+					
+					var baton: AnyRef = conn
+		
+			   	// Do the steps for the given period of time.
+					// Both dims of the steps array are treated circularly, i.e. if parallelism is greater than
+					// the length of the first dimension (outer array), the index wraps around. Likewise, if
+					// the number of runs is greater than an inner array, the index wraps around and the caller
+					// starts through the same steps all over.
+					for (step <- 0 to Int.MaxValue if !Thread.currentThread.isInterrupted) {
+		  	   	
+						val stepsIx = i % steps.length
+		   		 	val stepIx = step % steps(stepsIx).length 
+		        
+						val start = System.currentTimeMillis
+						val (nextBaton, op) = steps(stepsIx)(stepIx)(baton)
+						val elapsed = System.currentTimeMillis - start
+		        
+						// If step took too long, cancel everything. 
+						if (elapsed > maxWaitMillis) cancelRun
+		
+		      		//  If we're circling back to step 0, re-initialize the baton to connection.
+			   		baton = if ((stepIx + 1) == steps(stepsIx).length) conn else nextBaton
+		
+		  		 		results.add(op, elapsed.toInt)
+					}
+	      	}
+	      }
+		)
     }
 		
 	// 'parallelism' number of threads are running.  Block this thread for runLenSec seconds
 	Thread.sleep(runLenSecs * 1000)
 	
-	// Kill the threads, ignoring exceptions due to interrupted threads, and compute results.
-	
-   Exception.ignoring(classOf[Throwable]) {
-		tpool.shutdownNow()
-	}
+	// Interrupt the threads and compute results.
+	tpool.shutdownNow()
 	
 	println("*********** RESULTS *************")
 	results.compute.foreach { case (op, arr) =>
