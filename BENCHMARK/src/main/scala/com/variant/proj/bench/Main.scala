@@ -32,9 +32,9 @@ object Main extends App {
 	val rand = new java.util.Random(System.currentTimeMillis)
 
 	// Externalize these
-	val maxWaitSecs = 5   // Max time to block for futures at each step
-  val stepsToRun = 10   // How many steps to run? Each step is given 1 sec.
-  val parallelism = 1   // Degree of parallelism at each step.
+	val maxWaitSecs = 5       // Max time to block for futures at each step
+  val runLengthMinutes = 1  // How many steps to run? Each step is given 1 sec.
+  val parallelism = 10      // Degree of parallelism at each step.
   
   val log = LoggerFactory.getLogger(getClass)
   
@@ -91,9 +91,46 @@ object Main extends App {
 						ssn.getStateRequest.get.commit()
 						(ssn, OP_COMMIT_REQUEST)
 					},
+				),
+				Array(
+					ref => {
+						log.debug("Getting session")
+						val conn = ref.asInstanceOf[Connection]
+						val ssn = conn.getOrCreateSession(StringUtils.random128BitString(rand))
+						(ssn, OP_CREATE_SESSION)
+					},
+					ref => {
+						log.debug("Targeting session for state1")
+						val ssn = ref.asInstanceOf[Session]
+						val state1 = ssn.getSchema.getState("state1").get
+						ssn.targetForState(state1)
+						(ssn, OP_TARGET_SESSION)
+					},
+					ref => {
+						log.debug("Committing request for state1")
+						val ssn = ref.asInstanceOf[Session]
+						val state1 = ssn.getSchema.getState("state1").get
+						ssn.getStateRequest.get.commit()
+						(ssn, OP_COMMIT_REQUEST)
+					},
+					ref => {
+						log.debug("Targeting session for state2")
+						val ssn = ref.asInstanceOf[Session]
+						val state2 = ssn.getSchema.getState("state2").get
+						ssn.targetForState(state2)
+						(ssn, OP_TARGET_SESSION)
+					},
+					ref => {
+						log.debug("Committing request for state2")
+						val ssn = ref.asInstanceOf[Session]
+						val state1 = ssn.getSchema.getState("state1").get
+						ssn.getStateRequest.get.commit()
+						(ssn, OP_COMMIT_REQUEST)
+					},
 				)
+
 		)
-	
+		
 	val conn = variant.connectTo("variant://localhost:5377/benchmark")
 
 	log.debug("Connected to Variant schema" + conn.getSchemaName);
@@ -105,20 +142,24 @@ object Main extends App {
 	// Futures array
   val futures = new Array[Future[Unit]](parallelism)
   	
-  // Do the steps
-	for (step <- 0 until stepsToRun) {
-
-    //val start = System.currentTimeMillis
+  // Do the steps for the given period of time.
+	for (step <- 0 to Int.MaxValue) {
     
+		// Both dims of the steps array are treated circularly, i.e. if parallelism is greater than
+		// the length of the first dimension (outer array), the index wraps around. Likewise, if
+		// the number of runs is greater than an inner array, the index wraps around and the caller
+		// starts through the same steps all over.
     for (i <- 0 until parallelism) {
+    	
       futures(i) = Future {
       	blocking {
       		
-      		val nextStepIx = step % steps(i).length 
+      		val stepsIx = i % steps.length
+      		val stepIx = step % steps(stepsIx).length 
 	        
 	        // Do the step
       		val start = System.currentTimeMillis
-	        val (baton, op) = steps(i)(nextStepIx)(batons(i))
+	        val (baton, op) = steps(stepsIx)(stepIx)(batons(i))
 	        val elapsed = System.currentTimeMillis - start
 	        
 	        // If step took too long, cancel everything. 
@@ -128,7 +169,7 @@ object Main extends App {
 	        }
 
       		//  If we're circling back to step 0, re-initialize the baton to connection.
-      		batons(i) = if ((nextStepIx + 1) == steps(i).length) conn else baton
+      		batons(i) = if ((stepIx + 1) == steps(stepsIx).length) conn else baton
 
       		results.add(op, elapsed.toInt)
       	}
@@ -161,7 +202,12 @@ object Main extends App {
       
   }
 
-  results.print  			
+	println("*********** RESULTS *************")
+  results.compute.foreach { case (op, arr) =>
+  	println (s"Operation [${op}]")
+  	println(arr.toList)
+  }
+  
 
   /**
    * 
