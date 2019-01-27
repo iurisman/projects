@@ -13,7 +13,7 @@ import scala.util.Sorting
  * Clearly, this is a race condition, which we choose to tolerate as it's not likely to have a great
  * influence on the averages.
  */
-class Results() {
+class Measures() {
 	
 	val map = new TrieMap[String, ConcurrentLinkedQueue[Int]]()
 	
