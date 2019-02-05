@@ -6,4 +6,4 @@
 
 cd $(dirname $0)
 
-scala -classpath "benchmark_2.12-1.0.0-SNAPSHOT.jar:application.conf:lib/*" com.variant.proj.bench.Main
+scala -classpath "benchmark_2.12-1.0.0-SNAPSHOT.jar:application.conf:lib/*" -Dvariant.timers com.variant.proj.bench.Main

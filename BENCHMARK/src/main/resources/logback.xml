@@ -24,9 +24,9 @@
   <logger name="com.variant" level="info" />
 
 
-  <root level="WARN">
-    <appender-ref ref="ASYNCFILE" />
-    <appender-ref ref="ASYNCSTDOUT" />
+  <root level="info">
+    <appender-ref ref="FILE" />
+    <appender-ref ref="STDOUT" />
   </root>
 
 </configuration>
