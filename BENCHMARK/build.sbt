@@ -18,7 +18,11 @@ libraryDependencies ++= Seq(
   
   )
 
+// Corral all the managed jars in a directory.
 retrieveManaged := true
+
+// Do not include scala version in the name of the artifact.
+crossPaths := false
 
 // Java sources compilation level
 javacOptions ++= Seq("-source", "1.8", "-target", "1.8")

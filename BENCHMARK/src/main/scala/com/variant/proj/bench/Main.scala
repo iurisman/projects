@@ -42,9 +42,7 @@ object Main extends App {
 	val parallelism = 2     // Degree of parallelism at each step.
 
 	val log = LoggerFactory.getLogger(getClass)
-  
-	log.debug("Available processors: " + Runtime.getRuntime.availableProcessors())
-  
+    
  	// Connect to the benchmark schema.
 	val variant = new VariantClient.Builder()
 			.withSessionIdTrackerClass(classOf[SessionIdTrackerHeadless])
@@ -182,14 +180,7 @@ object Main extends App {
 	// Interrupt the threads and compute results.
 	tpool.shutdownNow()
 	
-	if (!canceled) {
-		println("***************************** RESULTS ******************************")
-		results.compute.foreach { case (op, locals, remotes) =>
-		  	println (s"Operation [${op}]")
-	  		println(locals.toList)
-	  		println(remotes.toList)
-		}
-	}
+	if (!canceled) writeMeasures(results)
 	
 	/**
 	 * Compute all targetable states and pick one randomly.
@@ -233,6 +224,30 @@ object Main extends App {
 		targetableStates.toList(Random.nextInt(targetableStates.size))		
 	}
 	
+	/**
+	 * Compute and output the run's measures.
+	 */
+	def writeMeasures(measures: Measures) {
+		
+		val results = measures.compute;
+		
+		if (props.getProperty("environment").equals("local")) {
+		
+			println("***************************** RESULTS ******************************")
+			println(s"Available processors: ${Runtime.getRuntime.availableProcessors}")
+			println(s"Parallelism: ${parallelism}") 
+			println(s"Run length, sec: ${runLenSecs}") 
+			results.foreach { case (op, size, locals, remotes) =>
+			  	println (s"Operation [${op}] (${size} measures)")
+		  		println(locals.toList)
+		  		println(remotes.toList)
+			}
+		}
+		else {
+			???
+		}
+	}
+
   /**
    * Cancel run. If running on AWS, signal death.
    */

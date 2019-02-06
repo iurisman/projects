@@ -38,8 +38,8 @@ class Measures() {
 	 * is the name of the method and the second is a 5-element Int array with the interquartile measurements. Note that we ignore the largest
 	 * number as it tends to be way off.
 	 */
-	def compute: Seq[(String, Array[Int], Array[Int])] = {
-			val result = new ArrayBuffer[(String, Array[Int], Array[Int])]()
+	def compute: Seq[(String, Int, Array[Int], Array[Int])] = {
+			val result = new ArrayBuffer[(String, Int, Array[Int], Array[Int])]()
 			
 			for ( (op, list) <- map) {
 				val localMeasures = list.asScala.map(_(0)).toArray
@@ -47,7 +47,9 @@ class Measures() {
 				Sorting.quickSort(localMeasures)
 				Sorting.quickSort(remoteMeasures)
 				result.append(
-						(op, 
+						(
+							op,
+							localMeasures.size,
 							Array(
 								localMeasures(0), 
 								localMeasures(localMeasures.length / 4), 
