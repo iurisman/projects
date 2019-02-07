@@ -34,9 +34,11 @@ class Measures() {
 	
 	/**
 	 * Compute the results.
-	 * Each element in the returned sequence is a double, whose first element
-	 * is the name of the method and the second is a 5-element Int array with the interquartile measurements. Note that we ignore the largest
-	 * number as it tends to be way off.
+	 * Each element in the returned sequence is a tuple:
+	 * • operation
+	 * • number of executions.
+	 * • 5-element local quartiles list
+	 * • 5-element remote quartiles list
 	 */
 	def compute: Seq[(String, Int, Array[Int], Array[Int])] = {
 			val result = new ArrayBuffer[(String, Int, Array[Int], Array[Int])]()
@@ -55,16 +57,14 @@ class Measures() {
 								localMeasures(localMeasures.length / 4), 
 								localMeasures(localMeasures.length / 2), 
 								localMeasures(localMeasures.length * 3 / 4),
-								// Ignore the largest number, as it tends to be misleadingly large.
-								localMeasures(localMeasures.length - 2)
+								localMeasures(localMeasures.length - 1)
 							),
 							Array(
 								remoteMeasures(0), 
 								remoteMeasures(remoteMeasures.length / 4), 
 								remoteMeasures(remoteMeasures.length / 2), 
 								remoteMeasures(remoteMeasures.length * 3 / 4),
-								// Ignore the largest number, as it tends to be misleadingly large.
-								remoteMeasures(remoteMeasures.length - 2)
+								remoteMeasures(remoteMeasures.length - 1)
 							)
 						)
 				)		

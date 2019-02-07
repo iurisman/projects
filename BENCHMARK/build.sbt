@@ -14,7 +14,8 @@ libraryDependencies ++= Seq(
     
   // Variant Client
   "com.variant"            % "variant-java-client"        % "0.10.0",
-  "com.amazonaws"          % "aws-java-sdk-sqs"           % "1.11.24"
+  "com.amazonaws"          % "aws-java-sdk-sqs"           % "1.11.24",
+  "com.amazonaws"          % "aws-java-sdk-dynamodb"      % "1.11.24"
   
   )
 

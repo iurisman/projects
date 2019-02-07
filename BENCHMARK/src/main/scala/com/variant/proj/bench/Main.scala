@@ -18,6 +18,8 @@ import com.variant.core.schema.State
 import com.variant.core.util.StringUtils
 import com.variant.proj.aws.SQS
 import com.variant.proj.bench.JavaImplicits._
+import com.variant.proj.aws.Dynamo
+import com.amazonaws.services.dynamodbv2.model.AttributeValue
 
 object Main extends App {
 
@@ -36,8 +38,7 @@ object Main extends App {
 	props.load(getClass.getResourceAsStream("/benchmark.props"))
 				
 	// Externalize these
-	val maxWaitMicros = 1000000 // If a step takes over a second, 
-	                            //either parallelism is too high or the server isn't keeping up.
+	val maxWaitMicros = 1000000 // Pure local time is too high
 	val runLenSecs  = 30    // How many steps to run? Each step is given 1 sec.
 	val parallelism = 2     // Degree of parallelism at each step.
 
@@ -76,10 +77,9 @@ object Main extends App {
 				(ssn, OP_COMMIT_REQUEST)
 			},
 			ref => {
-				// Write ssn attribute
+				// Write attribute
 				val ssn = ref.asInstanceOf[Session]
 				ssn.getAttributes.put("foo", "bar");
-				ssn.getStateRequest.get.commit()
 				(ssn, OP_WRITE_ATTR)
 			},
 			ref => {
@@ -98,7 +98,6 @@ object Main extends App {
 				// Read attribute
 				val ssn = ref.asInstanceOf[Session]
 				ssn.getAttributes.get("foo", "bar");
-				ssn.getStateRequest.get.commit()
 				(ssn, OP_READ_ATTR)
 			},
 			ref => {
@@ -148,8 +147,8 @@ object Main extends App {
 		        
 						try { 
 							val (nextBaton: AnyRef, op: String) = steps(stepIx)(baton) 
-							val elapsedLocal = Timers.localTimer.get.getAndClear
 							val elapsedRemote = Timers.remoteTimer.get.getAndClear
+							val elapsedLocal = Timers.localTimer.get.getAndClear - elapsedRemote
 		        
 							// If step took too long, cancel everything.  Most likely we're expecting too much from the client. 
 							if (elapsedLocal > maxWaitMicros) {
@@ -174,8 +173,10 @@ object Main extends App {
 		)
     }
 	
-	// 'parallelism' number of threads are running.  Block this thread for runLenSec seconds
-	Thread.sleep(runLenSecs * 1000)
+	// 'parallelism' number of threads are running.  Block this thread for runLenSec seconds.
+	val now = System.currentTimeMillis
+	while (!canceled && (System.currentTimeMillis() - now) <= runLenSecs * 1000)
+		Thread.sleep(50)
 	
 	// Interrupt the threads and compute results.
 	tpool.shutdownNow()
@@ -236,15 +237,57 @@ object Main extends App {
 			println("***************************** RESULTS ******************************")
 			println(s"Available processors: ${Runtime.getRuntime.availableProcessors}")
 			println(s"Parallelism: ${parallelism}") 
-			println(s"Run length, sec: ${runLenSecs}") 
+			println(s"Run duration, sec: ${runLenSecs}") 
 			results.foreach { case (op, size, locals, remotes) =>
 			  	println (s"Operation [${op}] (${size} measures)")
-		  		println(locals.toList)
-		  		println(remotes.toList)
+		  		println("Locals: " + locals.toList)
+		  		println("Remotes: " + remotes.toList)
 			}
 		}
 		else {
-			???
+			val clientId = Option(System.getProperty("client.id")).getOrElse("unset");
+			val runId = Option(System.getProperty("run.id")).getOrElse("macbook");
+			val dynamo = new Dynamo()
+			val summaryRecord = Map(
+					"key" -> s"$runId $clientId summary",
+					"run_id" -> runId,
+					"client_id" -> clientId,
+					"rec_type" -> "summary",
+					"processors" -> Runtime.getRuntime.availableProcessors,
+					"parallelism" -> parallelism,
+					"run_duration_sec" -> runLenSecs)
+			
+			dynamo.writeItem("benchmark", summaryRecord)
+			
+			results.foreach { case (op, size, locals, remotes) =>
+				val opRecord =
+					Map(
+						"key" -> s"$runId $clientId $op",
+						"run_id" -> runId,
+						"client_id" -> clientId,
+						"rec_type" -> op,					
+						"op" -> op,
+						"size" -> size,
+						"local_0" -> locals(0),
+						"local_1" -> locals(1),
+						"local_2" -> locals(2),
+						"local_3" -> locals(3),
+						"local_4" -> locals(4),
+						"remote_0" -> remotes(0),
+						"remote_1" -> remotes(1),
+						"remote_2" -> remotes(2),
+						"remote_3" -> remotes(3),
+						"remote_4" -> remotes(4),
+				)
+				dynamo.writeItem("benchmark", opRecord)	
+			}
+				
+/*
+			  	attrs.${op}] (${size} measures)")
+		  		println("Locals: " + locals.toList)
+		  		println("Remotes: " + remotes.toList)
+			}
+*/
 		}
 	}
 
