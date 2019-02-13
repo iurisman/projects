@@ -2,13 +2,25 @@ package com.variant.proj.aws
 
 import scala.collection.JavaConverters._
 
+
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder
 import com.amazonaws.services.dynamodbv2.model.AttributeValue
+import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.auth.AWSStaticCredentialsProvider
+import com.variant.proj.aws.AWS._
 
-class Dynamo {
+object Dynamo {
+	def apply(implicit credentials: (String,String)) = new Dynamo(credentials)
+}
 
-	val dynamoDbClient = AmazonDynamoDBClientBuilder.defaultClient();
+class Dynamo(credentials: (String,String)) {
+
+	val awsCreds = new BasicAWSCredentials(credentials._1, credentials._2);
+	val dynamoDbClient = AmazonDynamoDBClientBuilder
+		.standard()
+		.withCredentials(new AWSStaticCredentialsProvider(awsCreds))
+		.build()
 
 	
 	def writeItem(table: String, values: Map[String, Any]) {
@@ -25,25 +37,16 @@ class Dynamo {
  */
 object Test extends App {
 	
-	val dynamo = new Dynamo
+
+	val dynamo = Dynamo(implicitly)
 
 	dynamo.writeItem(
 			"benchmark", 
 			Map(
-					"type_plus_run_id" -> "12-summary",
-					"processors" -> 1,
-					"parallelism" -> 4
+					"key" -> "testing",
+					"foo" -> 1,
+					"bar" -> "bar"
 			)
 	)
 	
-	dynamo.writeItem(
-			"benchmark", 
-			Map(
-					"type_plus_run_id" -> "12-op",
-					"op" -> "CREATE SESSION",
-					"total" -> 4,
-					"min" -> 0
-			)
-	)
-
 }

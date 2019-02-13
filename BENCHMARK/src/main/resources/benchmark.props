@@ -1,2 +1,11 @@
+# local or aws?
 environment = local
-server.url = variant://localhost:5377/benchmark
+# A run is aborted if pure local elapsed time is over 1 second --
+# indicates that the client machine is underpowered.
+max.local.millis = 1000
+# How long to wait for the green flag to start?
+startup.timeout.secs = 300
+# For how long to go?
+run.duration.secs  = 600
+# Total number of threads is available processors times this factor.    
+parallelism.factor = 2

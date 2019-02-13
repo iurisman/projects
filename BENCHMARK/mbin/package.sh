@@ -2,6 +2,7 @@
 
 ##
 ## Package this project.
+## No arguments if local deployment, or pass 'aws' as single arugment for aws deployment.
 ## Creates a .zip file that can be uploaded to a client instance.
 ##
 
@@ -9,12 +10,6 @@ cd $(dirname $0)/..
 root=$(pwd)
 
 env=${1:-local}
-
-if [ $env == "aws" ] && [ -z $2 ]; then
-  echo "Usage: $(basename $0) aws <server-url>"
-  exit 2
-fi
-svrurl=$2
 
 echo "Building Benchmark for $env deployment"
 
@@ -32,12 +27,12 @@ rm -rf target/tmp
 mkdir target/tmp
 
 # If aws deployment, we need to unpack the benchmark jar 
-# and replace the properties file. (There's probably a better way.)
+# and fix up the properties file.
 if [ $env == "aws" ]; then
   cd target/tmp
   unzip ../benchmark-1.0.0-SNAPSHOT.jar
-  echo "environment = aws" > benchmark.props
-  echo "server.url = $svrurl" >> benchmark.props
+  sed "s/= local/= aws/" benchmark.props > benchmark.props.tmp
+  mv benchmark.props.tmp benchmark.props
   rm ../benchmark-1.0.0-SNAPSHOT.jar
   zip -r ../benchmark-1.0.0-SNAPSHOT.jar *
   rm -rf *

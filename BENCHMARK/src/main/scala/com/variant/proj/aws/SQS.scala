@@ -1,25 +1,52 @@
 package com.variant.proj.aws
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
-import com.amazonaws.services.sqs.model.SendMessageRequest;
+import scala.concurrent.duration.Duration
+import scala.collection.JavaConverters._
 import org.slf4j.LoggerFactory
 
-object SQS {
-  
-	val log = LoggerFactory.getLogger(getClass)
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
+import com.amazonaws.services.sqs.model.Message
+import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.auth.AWSStaticCredentialsProvider
+import com.amazonaws.services.sqs.AmazonSQSClientBuilder
 
-	val sqs = AmazonSQSClientBuilder.defaultClient()
+object SQS {
+	def apply(url: String)(implicit credentials: (String, String)) = new SQS(url, credentials)
+}
+
+
+class SQS(url: String, credentials: (String,String)) {
+  	
+	val log = LoggerFactory.getLogger(getClass)
+	val awsCreds = new BasicAWSCredentials(credentials._1, credentials._2);
+
+	val sqs = AmazonSQSClientBuilder
+		.standard()
+		.withCredentials(new AWSStaticCredentialsProvider(awsCreds))
+		.build()
 	
-	def enqueue(queue: String, msg: String) {
+	def enqueue(msg: String) {
 		
 		val req = new SendMessageRequest()
-    	.withQueueUrl(queue)
-      .withMessageBody(msg)
+	    	.withQueueUrl(url)
+   	   .withMessageBody(msg)
 		
-    sqs.sendMessage(req)
-    log.debug(s"Enqueued message [${msg}]")
+    	sqs.sendMessage(req)
     
 	}
-	
+
+   def dequeue(timeout: Duration): List[Message] = {
+				
+   	val timeoutMillis = timeout.toMillis
+   	val start = System.currentTimeMillis
+    	var messages = sqs.receiveMessage(url).getMessages
+    	while (messages.size() == 0 && (System.currentTimeMillis() - start) < timeoutMillis) {
+    		Thread.sleep(1000)
+    		messages = sqs.receiveMessage(url).getMessages
+    	}
+   	    	
+    	messages.asScala.toList
+	}
+
 }

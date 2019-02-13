@@ -4,6 +4,7 @@ import java.util.concurrent.Executors
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.concurrent.duration._
 import scala.util.Random
 
 import org.slf4j.LoggerFactory
@@ -18,12 +19,12 @@ import com.variant.core.schema.State
 import com.variant.core.util.StringUtils
 import com.variant.proj.aws.SQS
 import com.variant.proj.bench.JavaImplicits._
+import com.variant.proj.aws.AWS._
 import com.variant.proj.aws.Dynamo
 import com.amazonaws.services.dynamodbv2.model.AttributeValue
+import java.util.Calendar
 
 object Main extends App {
-
-	val AWS_SQS_BENCHMARK_URL = "https://sqs.us-east-2.amazonaws.com/071311804336/benchmark"
 	
 	val OP_CREATE_SESSION = "Create Session"
 	val OP_TARGET_SESSION = "Target Session"
@@ -32,18 +33,39 @@ object Main extends App {
 	val OP_READ_ATTR      = "Read State Attribute"
 	val OP_WRITE_ATTR     = "Write State Attribute"
 	
+	// SQS Client
+	val sqs = SQS("https://sqs.us-east-2.amazonaws.com/071311804336/benchmark")
+
+	// DynamoDB client (dunno why awsCreds isn't getting passed implicitly)
+	val dynamo = new Dynamo(implicitly)
+
 	val rand = new java.util.Random(System.currentTimeMillis)
 
 	val props = new java.util.Properties()
 	props.load(getClass.getResourceAsStream("/benchmark.props"))
 				
-	// Externalize these
-	val maxWaitMicros = 1000000 // Pure local time is too high
-	val runLenSecs  = 30    // How many steps to run? Each step is given 1 sec.
-	val parallelism = 2     // Degree of parallelism at each step.
+	// Pure local time cannot exceed this
+	val maxWaitMicros = props.getProperty("max.local.millis").toInt * 1000
+	// How long to run?
+	val runLenSecs = props.getProperty("run.duration.secs").toInt 
+	// How many parallel threads to fire?
+	val parallelism = props.getProperty("parallelism.factor").toInt * Runtime.getRuntime.availableProcessors
 
 	val log = LoggerFactory.getLogger(getClass)
-    
+   	
+	// All defaults are suitable for local execution. 
+	// In AWS mode, override with -D properties on command line.
+	val clientId = Option(System.getProperty("client.id")).getOrElse("igors mac");
+	val runId = Option(System.getProperty("run.id")).getOrElse(s"$parallelism threads");
+	val serverUrl = Option(System.getProperty("server.url")).getOrElse("variant://localhost:5377/benchmark");
+
+	// Block until we get green flag from SQS
+	val startupTimeoutSecs = props.getProperty("startup.timeout.secs").toInt
+	if (sqs.dequeue(startupTimeoutSecs seconds).size == 0)
+		cancelRun(s"Timed out after ${startupTimeoutSecs} seconds waiting for green flag") 
+	
+	val startTime = Calendar.getInstance
+	
  	// Connect to the benchmark schema.
 	val variant = new VariantClient.Builder()
 			.withSessionIdTrackerClass(classOf[SessionIdTrackerHeadless])
@@ -115,7 +137,7 @@ object Main extends App {
 		)
 		
 	var canceled = false;
-	val conn = variant.connectTo("variant://localhost:5377/benchmark")
+	val conn = variant.connectTo(serverUrl)
 
 	log.debug("Connected to Variant schema" + conn.getSchemaName);
 
@@ -163,9 +185,12 @@ object Main extends App {
 						}
 						catch {
 							case t:Throwable => 
-								log.error(s"Run canceled at step [${stepIx}] due to exception in Runnable [${t.getMessage}]", t)
-								cancelRun
-								
+									// We may have been interrupted mid-stop by the pool shutdown.
+									if (!Thread.currentThread.isInterrupted) {
+										val msg = s"Run canceled at step [${stepIx}] due to exception in Runnable [${t.getMessage}]"
+										log.error(msg, t)
+										cancelRun(msg)
+									}
 						}
 					}
 	      	}
@@ -245,9 +270,6 @@ object Main extends App {
 			}
 		}
 		else {
-			val clientId = Option(System.getProperty("client.id")).getOrElse("unset");
-			val runId = Option(System.getProperty("run.id")).getOrElse("macbook");
-			val dynamo = new Dynamo()
 			val summaryRecord = Map(
 					"key" -> s"$runId $clientId summary",
 					"run_id" -> runId,
@@ -255,7 +277,8 @@ object Main extends App {
 					"rec_type" -> "summary",
 					"processors" -> Runtime.getRuntime.availableProcessors,
 					"parallelism" -> parallelism,
-					"run_duration_sec" -> runLenSecs)
+					"run_duration_sec" -> runLenSecs,
+					"run_start" -> startTime.toString())
 			
 			dynamo.writeItem("benchmark", summaryRecord)
 			
@@ -280,30 +303,29 @@ object Main extends App {
 						"remote_4" -> remotes(4),
 				)
 				dynamo.writeItem("benchmark", opRecord)	
-			}
-				
-/*
-			  	attrs.${op}] (${size} measures)")
-		  		println("Locals: " + locals.toList)
-		  		println("Remotes: " + remotes.toList)
-			}
-*/
+			}				
 		}
 	}
 
   /**
    * Cancel run. If running on AWS, signal death.
    */
-	def cancelRun {
+	def cancelRun(msg: String) {
 		
 		canceled = true;
-		Thread.currentThread().interrupt
 		log.error("************************* RUN CANCELED *************************")
+				val opRecord =
+					Map(
+						"key" -> s"$runId $clientId cancel",
+						"run_id" -> runId,
+						"client_id" -> clientId,
+						"rec_type" -> "cancel",					
+						"op" -> s"OPERATION CANCELED [$msg]"
+				)
+				dynamo.writeItem("benchmark", opRecord)	
 		
-		if (props.getProperty("environment").equals("local")) { }
-		else {
-	  		SQS.enqueue(AWS_SQS_BENCHMARK_URL, "CANCEL")
-		}
+		Thread.currentThread().interrupt
+
   	}
 	
 }
