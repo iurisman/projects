@@ -3,9 +3,9 @@
 #
 # CONSTANTS
 #
-server_instance_type=m5.large
-client_instance_type=c5.large
-client_count=8
+server_instance_type=m5.xlarge
+client_instance_type=m4.xlarge
+client_count=10
 
 cd $(dirname $0)/..
 root=$(pwd)
@@ -21,6 +21,7 @@ launch_server () {
         aws ec2 run-instances --image-id ami-0c638a830551f3ac7 \
             --security-group-ids sg-0b07059cb2f07c7ab \
             --key-name aws \
+            --subnet-id subnet-11695c79 \
             --count 1 \
             --instance-type ${server_instance_type} \
             --query "Instances[0].InstanceId" --output text)
@@ -41,7 +42,7 @@ launch_server () {
     echo "Starting Variant Server at ${server_pub_ip}:5377"
   
     # sshd lags behind "wait instance-running" -- let's wait.
-    sleep 20s
+    sleep 30s
 
     # Copy the benchmark schema to the server
     scp -i ~/.ssh/aws.pem benchmark.schema ubuntu@${server_pub_ip}:${server_dir}/schemata
@@ -64,6 +65,7 @@ launch_client () {
         aws ec2 run-instances --image-id ami-0177a7d971c78f0cb \
             --security-group-ids sg-0b07059cb2f07c7ab \
             --key-name aws \
+            --subnet-id subnet-11695c79 \
             --count 1 \
             --instance-type ${client_instance_type} \
             --query "Instances[0].InstanceId" --output text)
@@ -84,14 +86,47 @@ launch_client () {
     echo "Starting Benchmark Client at ${client_pub_ip}"
     
     # sshd lags behind "wait instance-running" -- let's wait.
-    sleep 20s
+    sleep 30s
     
-    # This takes too long. Now baked into the AMI.
-    # scp -i ~/.ssh/aws.pem target/benchmark.zip ubuntu@$client_pub_ip:
-
     ssh -i ~/.ssh/aws.pem ubuntu@$client_pub_ip \
         "nohup ./runClient.sh \
         -Drun.id=$server_instance_type -Dclient.id=${client_instance_type}-$1 -Dserver.url=variant://${server_pub_ip}:5377/benchmark \
+        > stdout.txt 2> stderr.txt &"
+}
+
+launch_client2 () {
+
+    # Variant 0.10.0 Benchmark Client AMI
+    local client_iid=$( \
+        aws ec2 run-instances --image-id ami-0177a7d971c78f0cb \
+            --security-group-ids sg-0b07059cb2f07c7ab \
+            --key-name aws \
+            --subnet-id subnet-11695c79 \
+            --count 1 \
+            --instance-type m4.2xlarge \
+            --query "Instances[0].InstanceId" --output text)
+   
+    echo "Launching Client Instance ID: $client_iid"
+
+    # Wait for instance
+    aws ec2 wait instance-running \
+        --instance-ids $client_iid
+
+    # Obtain client's public IP
+    local client_pub_ip=$( \
+        aws ec2 describe-instances \
+            --instance-ids $client_iid \
+            --query "Reservations[0].Instances[0].PublicIpAddress" \
+            --output text)
+
+    echo "Starting Benchmark Client at ${client_pub_ip}"
+    
+    # sshd lags behind "wait instance-running" -- let's wait.
+    sleep 30s
+    
+    ssh -i ~/.ssh/aws.pem ubuntu@$client_pub_ip \
+        "nohup ./runClient.sh \
+        -Drun.id=$server_instance_type -Dclient.id=m4.2xlarge-$1 -Dserver.url=variant://${server_pub_ip}:5377/benchmark \
         > stdout.txt 2> stderr.txt &"
 }
 
@@ -106,6 +141,10 @@ for i in $(seq 1 $client_count); do
 
 done   
 
+for i in $(seq 1 3); do 
+   launch_client2 $i &
+
+done 
 wait
 
 # Enqueue the green flag message, ignoring the outupt.
@@ -114,3 +153,5 @@ aws sqs send-message \
     --message-body "GREEN" \
     > /dev/null
     
+# Echo date to help with monitoring.
+echo "All instances running on $(date)"

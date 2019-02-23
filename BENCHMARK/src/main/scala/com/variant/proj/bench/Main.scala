@@ -30,8 +30,8 @@ object Main extends App {
 	val OP_TARGET_SESSION = "Target Session"
 	val OP_COMMIT_REQUEST = "Commit State Request"
 	val OP_FAIL_REQUEST   = "Fail State Request"
-	val OP_READ_ATTR      = "Read State Attribute"
-	val OP_WRITE_ATTR     = "Write State Attribute"
+	val OP_READ_ATTR      = "Read Session Attribute"
+	val OP_WRITE_ATTR     = "Write Session Attribute"
 	
 	// SQS Client
 	val sqs = SQS("https://sqs.us-east-2.amazonaws.com/071311804336/benchmark")
