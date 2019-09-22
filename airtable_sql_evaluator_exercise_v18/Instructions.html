@@ -1,0 +1,155 @@
+<html>
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/2.10.0/github-markdown.min.css"/>
+    <style>
+    .markdown-body {
+        box-sizing: border-box;
+        min-width: 200px;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 45px;
+    }
+
+    @media (max-width: 767px) {
+        .markdown-body {
+            padding: 15px;
+        }
+    }
+    </style>
+</head>
+<body class="markdown-body">
+<h1 id="programming-assignment-sql-evaluator">Programming Assignment: SQL Evaluator</h1>
+<p>Write a command-line program that evaluates simple SQL queries.</p>
+<p>You don't have to write an SQL parser.  We've provided a tool (<code>sql-to-json</code>) that converts <a href="#sql-syntax">our subset of SQL</a> into a <a href="#json-formatted-sql">JSON-based format</a> for your program to load.</p>
+<pre><code>$ YOUR-PROGRAM &lt;table-folder&gt; &lt;sql-json-file&gt; &lt;output-file&gt;
+</code></pre>
+<p>Your program should:</p>
+<ol>
+<li>Load the <a href="#json-formatted-sql">JSON-formatted SQL</a> file.</li>
+<li>Load the <a href="#table-json">JSON-formatted tables</a> referenced by the query.  For example, the table &quot;countries&quot; should be loaded from &quot;&lt;table-folder&gt;/countries.table.json&quot;.</li>
+<li>If there are errors in the query, write an error message to the output file and exit.</li>
+<li>If there are no errors, evaluate the query and write the result table to the output file.</li>
+</ol>
+<p>You can assume the SQL JSON and Table JSON files are syntactically valid.  However, you should detect logical errors in the queries, such as:</p>
+<ul>
+<li>References to column names or table names that don't exist.</li>
+<li>Ambiguous column references (the column name exists in multiple tables).</li>
+<li>Use of a comparison operator on incompatible types (string vs integer).</li>
+</ul>
+<p>You should perform the evaluation entirely in memory, using the standard data structures provided by your programming language.</p>
+<ul>
+<li>Avoid libraries that already implement a relational database, or a large subset of one; for example, do not use SQLite, Apache Derby, Pandas dataframes, etc.</li>
+<li>You can use external libraries to help with reading/writing JSON.</li>
+<li>If you're writing in Java or Go, we've provided code to handle the JSON parsing part; see the &quot;starter-java/&quot; and &quot;starter-go/&quot; folders.</li>
+</ul>
+<p>In addition to your program, you should provide a readme file.  Be sure to read <em>evaluation criteria</em> below!</p>
+<h2 id="how-to-evaluate-an-sql-query">How to evaluate an SQL query</h2>
+<p>A simple way to evaluate SQL:</p>
+<ol>
+<li>Construct the cross-product of all the tables in the <code>FROM</code>.</li>
+<li>Filter things down by checking the <code>WHERE</code> conditions on each row of the cross-product.</li>
+<li>Pull out the columns referenced in the <code>SELECT</code>.</li>
+</ol>
+<p>Processing the cross-product can be an expensive operation.  For some queries (like our &quot;simple-*.sql&quot; examples), it might be necessary.  However, most real-world queries (like our &quot;cities-*.sql&quot; examples) can be evaluated more efficiently.</p>
+<p>We recommend starting with the cross-product approach.  Once you have it working, consider ways to improve performance for real-world queries.</p>
+<h2 id="examples">Examples</h2>
+<p>In the &quot;examples/&quot; folder:</p>
+<ul>
+<li>Table data is in the &quot;.table.json&quot; files</li>
+<li>Queries are in the &quot;.sql&quot; files.  The JSON-formatted versions of each query is in the &quot;.sql.json&quot; files -- these are the files your program will read.</li>
+<li>The expected output for each query is in the &quot;.expected&quot; files.</li>
+</ul>
+<p>To start, skim over the &quot;*.sql&quot; files to get an idea of what queries look like.  We recommend starting with the &quot;error-*.sql&quot; and &quot;simple-*.sql&quot; examples, which cover the fundamentals.</p>
+<p>Make sure you have Python 2.7+ or 3.2+ installed (<code>python --version</code>) to run our <code>sql-to-json</code> and <code>check</code> tools.</p>
+<p>To run your program against the &quot;simple-1.sql&quot; example query:</p>
+<pre><code>$ ./sql-to-json examples/simple-1.sql  # Writes to &quot;examples/simple-1.sql.json&quot;
+$ YOUR-PROGRAM examples examples/simple-1.sql.json examples/simple-1.out
+$ diff examples/simple-1.expected examples/simple-1.out
+</code></pre>
+<p>You can use the provided <code>check</code> tool to do all those steps for you:</p>
+<pre><code>$ ./check YOUR-PROGRAM -- &lt;table-folder&gt; &lt;sql-files...&gt;
+</code></pre>
+<p>For example, if your program is run via <code>python3 sql_evaluator.py</code>:</p>
+<pre><code>$ ./check python3 sql_evaluator.py -- examples examples/simple-1.sql
+</code></pre>
+<p>To run against all the example queries:</p>
+<pre><code>$ ./check python3 sql_evaluator.py -- examples examples/*.sql
+</code></pre>
+<h2 id="evaluation-criteria">Evaluation Criteria</h2>
+<ul>
+<li><strong>Above all else</strong>, we're looking for clean code: correct, easy to understand, and easy to maintain.</li>
+<li>The code should be somewhat efficient.  Don't worry about profiling and measuring microseconds, but don't just throw away CPU or memory doing redundant work.</li>
+<li>We'd like to see some improvement over the basic cross-product technique.  Though some queries will require processing the full cross-product, most real-world queries can be evaluated more efficiently.
+<ul>
+<li>Assume that the normal use case involves loading the tables once and then evaluating many different queries.  (Your program doesn't <em>actually</em> do this, but use this model for evaluating performance.)</li>
+<li>Assume that tables can be large (e.g. 100k rows) but everything still fits comfortably in memory.</li>
+</ul>
+</li>
+</ul>
+<p>To allow focusing on the above priorities, we're explicitly excluding testing from the evaluation criteria.  Feel free to write the tests necessary to gain confidence in your code, but we won't be looking at them.</p>
+<p>Don't worry about extensibility beyond the requirements given here.  For example, don't worry about handling other SQL features, other SQL data types, non-read-only tables, etc.</p>
+<p>When you submit your code, <strong>you must include a readme text file</strong> with:</p>
+<ul>
+<li>How long you spent on the assignment.</li>
+<li>Instructions on how to run your code.</li>
+<li>A brief explanation of your design choices.</li>
+<li>If you had five more hours to improve performance, what would you do?</li>
+</ul>
+<h2 id="file-formats">File Formats</h2>
+<h3 id="table-json">Table JSON</h3>
+<p>Example: <a href="examples/cities.table.json">examples/cities.table.json</a></p>
+<p>Each &quot;.table.json&quot; file is a JSON array.  The first element is a list of column definitions.  Each column definition is a pair where the first element is the column name and the second element is the column type (either &quot;str&quot; or &quot;int&quot;).</p>
+<p>The rest of the elements are the table's rows.  Each cell value will be either a string or an integer, depending on the columnn type.</p>
+<h3 id="sql-syntax">SQL Syntax</h3>
+<p>(You don't have to write a parser for this syntax.  The included Python program <code>sql-to-json</code> will convert SQL to a JSON-formatted equivalent.)</p>
+<pre><code>Query =
+    &quot;SELECT&quot; Selector ( &quot;,&quot; Selector )*
+    &quot;FROM&quot; TableDecl ( &quot;,&quot; TableDecl )*
+    ( &quot;WHERE&quot; Comparison ( &quot;AND&quot; Comparison )* )?
+
+Selector = ColumnRef ( &quot;AS&quot; &lt;identifier&gt; )?
+
+TableDecl = &lt;identifier&gt; ( &quot;AS&quot; &lt;identifier&gt; )?
+
+Comparison = Term ( &quot;=&quot; | &quot;!=&quot; | &quot;&gt;&quot; | &quot;&gt;=&quot; | &quot;&lt;&quot; | &quot;&lt;=&quot; ) Term
+
+Term = ColumnRef | &lt;string-literal&gt; | &lt;integer-literal&gt;
+
+ColumnRef = &lt;identifier&gt; ( &quot;.&quot; &lt;identifier&gt; )?
+</code></pre>
+<p>Comments start with &quot;--&quot; and go to the end of the line.</p>
+<p>Joins are performed using <a href="https://en.wikipedia.org/wiki/Join_(SQL)#Inner_join">implicit cross-join notation</a>.</p>
+<h3 id="json-formatted-sql">JSON-formatted SQL</h3>
+<p>Example: <a href="examples/cities-1.sql.json">examples/cities-1.sql.json</a> (converted from <a href="examples/cities-1.sql">examples/cities-1.sql</a>)</p>
+<pre><code>Query = {
+    select: Array&lt;Selector&gt;  // non-empty array
+    from: Array&lt;TableDecl&gt;  // non-empty array
+    where: Array&lt;Comparison&gt;
+}
+
+Selector = {
+    column: ColumnRef
+    as: string  // automatically derived from 'column' if there's no explicit &quot;AS&quot;
+}
+
+TableDecl = {
+    source: string  // the file to load (without the &quot;.table.json&quot; extension)
+    as: string  // automatically derived from 'source' if there's no explicit &quot;AS&quot;
+}
+
+Comparison = {
+    op: &quot;=&quot; | &quot;!=&quot; | &quot;&gt;&quot; | &quot;&gt;=&quot; | &quot;&lt;&quot; | &quot;&lt;=&quot;
+    left: Term
+    right: Term
+}
+
+Term = {column: ColumnRef} | {literal: int | string}
+
+ColumnRef = {
+    name: string
+    table: string | null  // non-null if the reference is fully-qualified (&quot;table1.column2&quot;)
+}
+</code></pre>
+
+</body>
+</html>

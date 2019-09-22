@@ -1,0 +1,35 @@
+{
+    "select": [
+        {
+            "column": {"name": "name", "table": "a1"},
+            "as": "a1_name"
+        },
+        {
+            "column": {"name": "age", "table": "a1"},
+            "as": "age"
+        },
+        {
+            "column": {"name": "name", "table": "a2"},
+            "as": "a2_name"
+        },
+        {
+            "column": {"name": "distance", "table": "b"},
+            "as": "distance"
+        }
+    ],
+    "from": [
+        {
+            "source": "a",
+            "as": "a1"
+        },
+        {
+            "source": "a",
+            "as": "a2"
+        },
+        {
+            "source": "b",
+            "as": "b"
+        }
+    ],
+    "where": []
+}

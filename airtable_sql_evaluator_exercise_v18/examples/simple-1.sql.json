@@ -1,0 +1,31 @@
+{
+    "select": [
+        {
+            "column": {"name": "name", "table": "a"},
+            "as": "a_name"
+        },
+        {
+            "column": {"name": "age", "table": null},
+            "as": "age"
+        },
+        {
+            "column": {"name": "name", "table": "b"},
+            "as": "b_name"
+        },
+        {
+            "column": {"name": "distance", "table": null},
+            "as": "distance"
+        }
+    ],
+    "from": [
+        {
+            "source": "a",
+            "as": "a"
+        },
+        {
+            "source": "b",
+            "as": "b"
+        }
+    ],
+    "where": []
+}

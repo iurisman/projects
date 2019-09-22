@@ -1,0 +1,38 @@
+{
+    "select": [
+        {
+            "column": {"name": "name", "table": "cities"},
+            "as": "name"
+        },
+        {
+            "column": {"name": "country", "table": null},
+            "as": "country"
+        },
+        {
+            "column": {"name": "population", "table": null},
+            "as": "population"
+        }
+    ],
+    "from": [
+        {
+            "source": "countries",
+            "as": "countries"
+        },
+        {
+            "source": "cities",
+            "as": "cities"
+        }
+    ],
+    "where": [
+        {
+            "op": "=",
+            "left": {"column": {"name": "capital", "table": null}},
+            "right": {"column": {"name": "name", "table": "cities"}}
+        },
+        {
+            "op": "!=",
+            "left": {"column": {"name": "country", "table": null}},
+            "right": {"literal": "India"}
+        }
+    ]
+}
