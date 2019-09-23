@@ -3,7 +3,7 @@ package queryevaluator
 import scala.collection.mutable
 
 /**
- * All data tables are referenced through here.
+ * "Physical" data tables are referenced through here.
  */
 object Tables {
   
@@ -18,10 +18,9 @@ object Tables {
 	def size = tableCache.size
 	
 	/**
-	 * Lookup a column reference at runtime.
-	 * Throws if table or column does not exists.
+	 * Lookup a table by its name.
 	 */
-	def lookupTable(tableName: String): Table = {
+	def byName(tableName: String): Table = {
 		
 		tableCache.getOrElseUpdate(tableName, Table.fromFile(tableName))
 		

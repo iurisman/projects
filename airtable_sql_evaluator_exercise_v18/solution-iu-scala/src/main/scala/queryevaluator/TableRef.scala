@@ -6,11 +6,11 @@ import scala.util.control.Breaks.breakable
 
 /**
  * Logical table, as given in the FROM clause.
- * Multiple table refs may point to the same "physical" Table.
- * This logical table may have been a product of two or more tables.
+ * Multiple table refs may point to the same "physical" Table, but at least one must supply an alias.
  */
-case class TableRef(alias: String, table: Table) {
-  
+case class TableRef(table: Table, alias: Option[String]) {
+
+	/*
 	// Original table refs, that were joined to produce this logical table.
 	private var _joinTrace = Seq[TableRef](this)
 	
@@ -94,5 +94,7 @@ case class TableRef(alias: String, table: Table) {
 		
 		result
 	}
+	* 
+	*/
 
 }

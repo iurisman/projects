@@ -1,25 +1,55 @@
 package queryevaluator
 
+import scala.collection.{mutable, immutable}
 import Datatype._
 
 /**
  * Encapsulates WHERE clause of a query.
  */
-case class WhereClause(private val expressions: Expression*) {
+class WhereClause(expressions: immutable.List[Expression]) {
 
 	/**
-	 * The list of niladic expressions, i.e. 
+	 * Is any of the expressions references this column ref?
+	 *
+	def contains(columnRef: ColumnRef) = {
+		expressions.map { exp =>
+			exp.lterm.isInstanceOf[ColumnRef] && exp.lterm.asInstanceOf[ColumnRef] == columnRef ||
+			exp.rterm.isInstanceOf[ColumnRef] && exp.rterm.asInstanceOf[ColumnRef] == columnRef		
+		}.fold(false)(_||_)
+	}*/
+		
+	/**
+	 * Unique column refs, i.e. if a column ref is used multiple times, include it only once.
+	 */
+	val columnRefs: Set[ColumnRef] = {
+		val result = mutable.HashSet[ColumnRef]()
+		expressions.foreach { exp => 
+			List(exp.lterm, exp.rterm).foreach { term => term match { case colRef: ExprColumnRef => result += colRef } }
+		}
+		result.toSet
+	}
+
+	/**
+	 * Unique column refs which reference given table ref.
+	 */
+	//def columnRefs(tableRef: TableRef): Set[ColumnRef] = columnRefs.filter ( _.tableRef == tableRef )
+	
+	/**
+	 * The list of niladic expressions, i.e. with both terms literal.
+	 * We want to apply these only once.
 	 */
 	def nilads() = expressions.filter { _.arity == 0 }
 	
 	/**
-	 * The list of monadic expressions, i.e. resolvable in one logical table:
+	 * The list of monadic expressions, i.e. resolvable in a single table:
 	 *  • one term is a literal and the other a column in the given table.
 	 *  • both terms are a column in the given table.
-	 *  NB: if two different aliases refer to the same table, they are still different.
 	 */
-	def monads(tableRefs: Seq[TableRef]): Seq[Expression] = 
-		expressions.filter(_.isResolvableMonad(tableRefs))
+	def monads(columnRefs: Seq[ColumnRef]): Seq[Expression] = 
+		expressions.filter { expr => 
+			expr.arity == 1 && 
+			List(expr.lterm, expr.rterm).forall(term => columnRefs.contains(term))
+		}
 
 
 	/**
@@ -27,6 +57,9 @@ case class WhereClause(private val expressions: Expression*) {
 	 * • both sides are columns, in two given tables.
 	 * Order of parameters does not matter, but they must be different.
 	 */
-	def dyads(table1Refs: Seq[TableRef], table2Refs: Seq[TableRef]): Seq[Expression] = 
-		expressions.filter(_.isResolvableDyad(table1Refs, table2Refs))
+	def dyads(columnRefs1: Seq[ColumnRef], columnRefs2: Seq[ColumnRef]): Seq[Expression] = 
+		expressions.filter { expr => 
+			expr.arity == 2 && 
+			List(expr.lterm, expr.rterm).forall(term => columnRefs1.contains(term) && columnRefs2.contains(term))
+		}
 }

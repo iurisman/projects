@@ -28,10 +28,10 @@ object Query {
 			
 		case Some(col) => 
 			// This is a column ref. 
-			val colAlias = (col \ "name").as[String]
+			val colName = (col \ "name").as[String]
 			val optTableAlias = (col \ "table").asOpt[String]
-			val column = from.lookupColumn(colAlias, optTableAlias)
-			ColumnRef(optTableAlias.getOrElse(column.table.name), colAlias, column)
+			val (tableRef, column) = from.lookupColumn(colName, optTableAlias)
+			ExprColumnRef(tableRef, column)
 				
 		case None =>
 			// This is a literal.
@@ -73,18 +73,19 @@ object Query {
 		/*
 		 * Parse FROM clause first
 		 */
-		val sources = new mutable.ListBuffer[(String, Option[String])]
+		val sources = new mutable.ListBuffer[(Table, Option[String])]
 		for (source <- from) {
 			val name = (source \ "source").as[String]
 			val optAlias = (source \ "as").asOpt[String]
-			sources += ((name, optAlias))
+			
+			sources += ((Tables.byName(name), optAlias))
 		}
 		val fromClause = new FromClause(sources:_*)
 
 		/*
 		 * Parse SELECT list
 		 */
-		val colRefs = new mutable.ListBuffer[ColumnRef]()
+		val colRefs = new mutable.ListBuffer[SelectColumnRef]()
 		for (colJsValue <- select) {
 
 			val colName = (colJsValue \ "column" \ "name").as[String]
@@ -92,15 +93,9 @@ object Query {
 			val optColAlias = (colJsValue \ "as").asOpt[String]
 			
 			// Cross reference this information with the FROM clause
-			val column = fromClause.lookupColumn(colName, optTableAlias)
-			
-			// if table alias not given, use the table name.
-			val tableAlias = optTableAlias.getOrElse(column.table.name)
-			
-			// If column alias not given, use fully qualified name
-			val colAlias = optColAlias.getOrElse(colName)
-			
-			colRefs +=  ColumnRef(tableAlias, colAlias, column)
+			val (tableRef, column) = fromClause.lookupColumn(colName, optTableAlias)
+						
+			colRefs +=  SelectColumnRef(tableRef, column, optColAlias)
 		}
 		val selectList = new SelectList(colRefs.toList)
 		
@@ -114,7 +109,7 @@ object Query {
 			val rterm = parseTerm((expr \ "right").get, fromClause)
 			expressions += new Expression(lterm, op, rterm)
 		}
-		val whereClause = new WhereClause(expressions:_*)
+		val whereClause = new WhereClause(expressions.toList)
 		
 		new Query(selectList, fromClause, whereClause)
 	}
@@ -132,13 +127,13 @@ class Query private (selectList: SelectList, from: FromClause, where: WhereClaus
 		val result = new ResultSet(selectList, where)
 		
 		// Apply all fully bound expressions once here. If any returns false we're done.
-		if ( where.nilads.foldLeft(true)(_ && _.eval()) ) {
+		if ( where.nilads.foldLeft(true)(_ && _.apply()) ) {
 
 			// Add FROM tables to the result set, filtering each table with expressions
 			// resolvable in that table.
-			from.tables.foreach { tableRef => result.joinWith(tableRef.filter(where)) }
+			from.tables.foreach { tableRef => result.join(tableRef) }
 		}
-		result.project()
+		
 		result
 	}
 }

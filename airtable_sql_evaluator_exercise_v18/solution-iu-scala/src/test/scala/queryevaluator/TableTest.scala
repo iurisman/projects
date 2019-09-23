@@ -17,17 +17,17 @@ class TableTest extends WordSpec with MustMatchers {
 			table.arity mustBe 2
 			table.cardinality mustBe 3
 			
-			val col1 = table.columnByShortName("name").get
+			val col1 = table.byName("name").get
 			col1.datatype mustBe Datatype.String
 			col1.index mustBe 0
-			col1.name mustBe Table.Column.Name("a","name")
+			col1.name mustBe "name"
 			
-			val col2 = table.columnByShortName("age").get
+			val col2 = table.byName("age").get
 			col2.datatype mustBe Datatype.Integer
 			col2.index mustBe 1
-			col2.name mustBe Table.Column.Name("a","age")
+			col2.name mustBe "age"
 			
-			table.columnByShortName("foo") mustBe None
+			table.byName("foo") mustBe None
 		}
 	}
 	
@@ -53,25 +53,22 @@ class TableTest extends WordSpec with MustMatchers {
 			table.cardinality mustBe 16
 			table.name mustBe "cities"
 			
-			val col1 = table.columnByShortName("name").get
-			table.columnByName(Table.Column.Name("cities", "name")).get mustBe col1
+			val col1 = table.byName("name").get
 			col1.datatype mustBe Datatype.String
 			col1.index mustBe 0
-			col1.name mustBe Table.Column.Name("cities", "name")
+			col1.name mustBe "name"
 			
-			val col2 = table.columnByShortName("country").get
-			table.columnByName(Table.Column.Name("cities", "country")).get mustBe col2
+			val col2 = table.byName("country").get
 			col2.datatype mustBe Datatype.String
 			col2.index mustBe 1
-			col2.name mustBe Table.Column.Name("cities", "country")
+			col2.name mustBe "country"
 			
-			val col3 = table.columnByShortName("population").get
-			table.columnByName(Table.Column.Name("cities", "population")).get mustBe col3
+			val col3 = table.byName("population").get
 			col3.datatype mustBe Datatype.Integer
 			col3.index mustBe 2
-			col3.name mustBe Table.Column.Name("cities", "population")
+			col3.name mustBe "population"
 
-			table.columnByShortName("foo") mustBe None
+			table.byName("foo") mustBe None
 
 		}
 	}
@@ -99,44 +96,40 @@ class TableTest extends WordSpec with MustMatchers {
 			table.cardinality mustBe 12345
 			table.name mustBe "big"
 			
-			val col1 = table.columnByShortName("fname").get
-			table.columnByName(Table.Column.Name("big", "fname")).get mustBe col1
+			val col1 = table.byName("fname").get
 			col1.datatype mustBe Datatype.String
 			col1.index mustBe 0
-			col1.name mustBe Table.Column.Name("big", "fname")
+			col1.name mustBe "fname"
 			
-			val col2 = table.columnByShortName("lname").get
-			table.columnByName(Table.Column.Name("big", "lname")).get mustBe col2
+			val col2 = table.byName("lname").get
 			col2.datatype mustBe Datatype.String
 			col2.index mustBe 1
-			col2.name mustBe Table.Column.Name("big", "lname")
+			col2.name mustBe "lname"
 			
-			val col3 = table.columnByShortName("age").get
-			table.columnByName(Table.Column.Name("big", "age")).get mustBe col3
+			val col3 = table.byName("age").get
 			col3.datatype mustBe Datatype.Integer
 			col3.index mustBe 2
-			col3.name mustBe Table.Column.Name("big", "age")
+			col3.name mustBe "age"
 
-			val col4 = table.columnByShortName("bdate").get
-			table.columnByName(Table.Column.Name("big", "bdate")).get mustBe col4
+			val col4 = table.byName("bdate").get
 			col4.datatype mustBe Datatype.String
 			col4.index mustBe 3
-			col4.name mustBe Table.Column.Name("big", "bdate")
+			col4.name mustBe "bdate"
 			
-			table.columnByShortName("foo") mustBe None
-			table.columnByShortName("") mustBe None
+			table.byName("foo") mustBe None
+			table.byName("") mustBe None
 		}
 	}
 	
 	"Tables" must {
 		
-		"lookup columns" in {
+		"lookup tables by name" in {
 			
-			val t1 = Tables.lookupTable("a")
+			val t1 = Tables.byName("a")
 			t1.name mustBe "a"
 			
 			assertThrows[RuntimeException] {
-				Tables.lookupTable("foo")
+				Tables.byName("foo")
 			}		
 		}
 	}

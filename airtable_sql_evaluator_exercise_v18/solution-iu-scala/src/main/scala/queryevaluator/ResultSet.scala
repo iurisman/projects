@@ -7,85 +7,128 @@ import java.io.ByteArrayOutputStream
 
 /**
  * Mutable result set, used for building the result of a query execution.
+ * Essentially a lot like a table, but metadata is keyed by column ref.
  */
+object ResultSet {
+	
+	/**
+	 * Columns in the result set metadata are referenced by the original column ref, augmented with the index
+	 * into the result set's data tuples.
+	 */
+	case class RsColumn(origColumnRef: ColumnRef, index: Int) 
+}
+
 class ResultSet(selectList: SelectList, where: WhereClause) {
   
-	// Joined data, as a logical table, which encapsulates the joining history trace.
-	private[this] var joinedTableRef: Option[TableRef] = None
-		
+	import ResultSet._
+	
+	/**
+	 * Columns in the result set don't have to be unique wrt original column ref.
+	 * I.e. select x as foo, x as foo from bar is legal.  But we maintain the order.
+	 */
+	private[this] var metadata = immutable.List[RsColumn]()
+
+	private[this] var data = immutable.List[Array[Any]]()
+	
+	/**
+	 * List of all hot columns in this data set. Column is hot if it occurs in select list or the WHERE clause.
+	 * Cold columns are not retained to save space.
+	 */
+	private[this] val hotColumns: List[ColumnRef] = selectList.columnRefs ++ where.columnRefs.toList
+	
 	/**
 	 * Join another table with this result set.
 	 */
-	def joinWith (tableRef: TableRef) {
+	def join (tableRef: TableRef) {
 
-		// First table goes as is, subsequent tables get joined with it.
-		joinedTableRef = joinedTableRef match { 
-			case Some(jtf) => Some(jtf.joinWith(tableRef, where))
-			case None => Some(tableRef)
+		// Construct the cartesian product of the rows currently in this object and the incoming table's.
+		// To save space, filter out incoming tuples that wouldn't satisfy the WHERE clause before
+		// computing the cartesian product.
+
+		// Keep old metadata for a bit.
+		val oldMetadata = metadata
+
+		// List of hot columns in the incoming table.
+		val newColRefs = hotColumns.filter(_.tableRef == tableRef)
+		
+		// Build the new metadata. 
+		val offset = metadata.size
+		var index = offset
+		val newMetadata = mutable.ListBuffer[RsColumn]()
+		newColRefs.foreach { cref =>
+			newMetadata += RsColumn(cref, index)
+			index += 1
 		}
+		metadata = metadata ++ newMetadata
+		
+		// Build the cartesian product, retaining only tuples which satisfy the WHERE clause
+		val joinedData = mutable.ListBuffer[Array[Any]]()
+		
+		for (incomingTuple <- tableRef.table.data) {
+			
+			// Monadic expressions that can be applied to this table in isolation
+			// are applied once per incoming tuple.
+			val monads = where.monads(newColRefs)
+			if (monads.forall(_.apply(incomingTuple, newColRefs))) {
+
+				// The incoming tuple minus the cold columns.
+				val projectedIncomingTuple = {
+					val result = new Array[Any](newMetadata.size)
+					newMetadata.foreach { 
+						cref => result(cref.index) = incomingTuple(cref.origColumnRef.column.index)
+					}
+					result
+				}
+					
+				for (thisTuple <- this.data) {
+					
+					// Apply dyadic expressions 
+					val dyads = where.dyads(newColRefs, oldMetadata.map(_.origColumnRef))
+					if (dyads.forall(_.apply(incomingTuple, oldMetadata, thisTuple, newColRefs))) {
+	
+						val combinedTuple = thisTuple ++ projectedIncomingTuple
+						joinedData += combinedTuple
+					}
+				}				
+			}
+		}
+		
+		data = joinedData.toList
 	}
 
 	/**
-	 * Restrict table to list of columns given in select list.
+	 * Restrict this result to select list only.
 	 */
-	def project() {
-		
-		joinedTableRef foreach { jtr =>
-			
-			// Construct new table. New metadata reflects new column indices in the projection.
-			val projectedMetadata = new mutable.LinkedHashMap[Table.Column.Name, Table.Column]()
-			
-			for ((colRef, ix) <- selectList.colRefs zipWithIndex) {
-				projectedMetadata += ((colRef.column.name, colRef.column.copy(index = ix))) 
-			}
-	
-			val projectedData = jtr.table.data.map { row =>
-				
-				val projectedRow = new Array[Any](projectedMetadata.size)
-				println(jtr.table.metadata)
-				projectedMetadata.values.foreach { col =>
-					projectedRow(col.index) = 
-						row(jtr.table.columnByName(col.name).get.index)
-				}
-				projectedRow
-			}
-			
-			val newTable = jtr.table.copy(
-					metadata = new Table.Metadata(projectedMetadata), 
-					data = projectedData)
-					
-			joinedTableRef = Some(jtr.copy(table = newTable))
-		}
-	}
+	def project() = ???
 	
 	/**
 	 * Marshal as JSON into given PrintStream
 	 */
 	def asJson(ps: PrintStream) {
 		
-		val header = selectList.colRefs.map(colRef => Json.arr(colRef.columnAlias, colRef.column.datatype))
+		def isHot(column: RsColumn) = selectList.contains(column.origColumnRef)
+		
+		val header = selectList.columnRefs.map(colRef => Json.arr(colRef.nameForDisplay, colRef.column.datatype))
+		
 		ps.append("[\n    ")
 		ps.append(Json.toJson(header).toString)
 
-		// If where clause contained a false-valued nilad, we'll have no table here.
-		joinedTableRef foreach { jtr =>
-			val rows = jtr.table.data.map { line => 
-				val jsonCells = line.map { cell => 
-					cell match {
-						case str: String => JsString(str)
-						case int: Int => JsNumber(int)
-					}
+		val rows = data.map { line => 
+			val jsonCells = line.map { cell => 
+				cell match {
+					case str: String => JsString(str)
+					case int: Int => JsNumber(int)
 				}
-				Json.toJson(jsonCells)	
 			}
-		
-			// Composing JSON by hand to take advantage of PrintStream's streaming.
-			// TODO: Perhaps the json lib we use can do it too???
-					
-			rows.foreach { row =>
-				ps.append(",\n    ")
-				ps.append(row.toString)
-			}
+			Json.toJson(jsonCells)	
+		}
+	
+		// Composing JSON by hand to take advantage of PrintStream's streaming.
+		// TODO: Perhaps the json lib we use can do it too???
+				
+		rows.foreach { row =>
+			ps.append(",\n    ")
+			ps.append(row.toString)
 		}
 		
 		ps.append("\n]\n")

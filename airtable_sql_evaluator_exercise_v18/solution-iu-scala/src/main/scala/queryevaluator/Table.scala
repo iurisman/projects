@@ -23,14 +23,14 @@ object Table {
 	/**
 	 * Column of a table.
 	 */
-	object Column {
-		case class Name private (tableName: String, columnName: String)
-	}
-	case class Column private (name: Column.Name, datatype: Datatype, index: Int) {
+	case class Column private (name: String, datatype: Datatype, index: Int) {
 				
 		// Parent link to the containing table is added after the instantiation.
 		private[Table] var _table: Table = _
-	 	lazy val table: Table = _table
+	 	
+		lazy val table: Table = _table
+	 	
+	 	lazy val qualName = table.name + "." + name
 	 	
 	 	/**
 	 	 * Columns are the same if their qualified names are the same.
@@ -46,45 +46,11 @@ object Table {
 	 	override def hashCode = name.hashCode	
 	}
 	
-	/**
-	 * Table metadata is a map of table columns keyed by their fully qualified name.
-	 */
-	class Metadata (private val columnMap: immutable.Map[Column.Name, Column]) {
-		
-		def this(columnMap: mutable.Map[Column.Name, Column]) = this(immutable.ListMap(columnMap.toSeq:_*))
-		
-		private var table: Table = _
-		
-		val arity = columnMap.size
-		
-		/**
-		 * Parent table object is not available at this object's construction time, 
-		 * so we add it here.
-		 */
-		def setParent(table: Table) {
-			this.table = table
-			columnMap.values.foreach(_._table = table)
-		}
-			
-		/**
-		 * Lookup a column.
-		 */
-		def byName(name: Column.Name): Option[Column] = columnMap.get(name)
-
-		/**
-		 * Lookup a column by its short, unqualified name
-		 */
-		def byShortName(shortName: String): Option[Column] = columnMap.get(Column.Name(table.name, shortName))
-		
-		/**
-		 * Debugging.
-		 */
-		override def toString() = columnMap.mkString(" ")
 		
 		/**
 		 * Join two metadata objects. A bit of a hack that we need to know the name of the
 		 * table for which this metadata is intended, but which is yet to be constructed.
-		 */
+		 *
 		def joinWith(other: Metadata, targetTableName: String): Metadata = {
 		
 			val newMap = 
@@ -101,8 +67,8 @@ object Table {
 				
 			new Metadata(newMap)
 		}
-
-	}	
+		* 
+		*/
 	
 	/**
 	 * Unmarshal from file.
@@ -132,7 +98,7 @@ object Table {
 	 */
 	def fromStream(tableName: String, is: InputStream): Table = {
 
-		val metadata = new mutable.LinkedHashMap[Column.Name, Column]()
+		val metadata = new mutable.LinkedHashMap[String, Column]()
 		val data = mutable.ListBuffer[Array[Any]]()
 		
 		val array = Json.parse(is).asInstanceOf[JsArray]
@@ -143,7 +109,7 @@ object Table {
 				// First row is table's metadata
 				for ((col, ix) <- row.as[Array[Array[String]]] zipWithIndex) {
 					// Use qualified name. 
-					val colName = Column.Name(tableName, col(0))
+					val colName = col(0)
 					val colType = Datatype.parse(col(1))
 					val newElem = Column(colName, colType, ix)
 					if (metadata.getOrElseUpdate(colName, newElem) != newElem)
@@ -162,7 +128,7 @@ object Table {
 			}
 		}
 		
-		new Table(tableName, new Metadata(metadata), data.toList)
+		new Table(tableName, immutable.ListMap(metadata.toSeq:_*), data.toList)
 	}
 
 }
@@ -173,14 +139,14 @@ object Table {
  * @param data Immutable list of tuple arrays indexed concurrent with column indices. 
  * TODO table data and metadata should be private.
  */
-class Table private (val name: String, val metadata: Table.Metadata, val data: List[Array[Any]]) {
+class Table private (val name: String, val metadata: immutable.Map[String, Table.Column], val data: List[Array[Any]]) {
   
 	import Table._
 	
 	// add parent link to each column ref
-	metadata.setParent(this)
+	metadata.values.foreach(_._table = this)
 	
-	val arity = metadata.arity
+	val arity = metadata.size
 	
 	val cardinality = data.size
 	
@@ -202,20 +168,15 @@ class Table private (val name: String, val metadata: Table.Metadata, val data: L
  	 */
  	def copy(
  			name: String = this.name, 
- 			metadata: Metadata = this.metadata, 
+ 			metadata: immutable.Map[String, Table.Column] = this.metadata, 
  			data: List[Array[Any]] = this.data): Table = {
  		
  	 	new Table(name, metadata, data)
  	}
  	
 	/**
-	 * Lookup a column by its short, unqualified name
+	 * Lookup a column.
 	 */
-	def columnByShortName(shortName: String): Option[Column] = metadata.byShortName(shortName)
-
-	/**
-	 * Lookup a column by its qualified name
-	 */
-	def columnByName(name: Column.Name): Option[Column] = metadata.byName(name)
+	def byName(name: String): Option[Column] = metadata.get(name)
 
 }

@@ -1,17 +1,39 @@
 package queryevaluator
 
 /**
- * Reference to column is how a column is referenced by select list or WHERE expressions.
- * Unique way to ID a column the context of a query.
+ * Base column ref is applicable to both SELECT list and the WHERE expressions.
  */
-case class ColumnRef(tableAlias: String, columnAlias: String, column: Table.Column) extends Expression.Term() {
+abstract class ColumnRef(val tableRef: TableRef, val column: Table.Column) {
 	
+	if (tableRef.table != column.table) 
+		throw new RuntimeException("Internal Error: Inconsistent column reference")
+}
+
+/**
+ * How a column is referenced by a WHERE expression.
+ */
+case class ExprColumnRef(override val tableRef: TableRef, override val column: Table.Column) extends ColumnRef(tableRef, column) with Expression.Term {
 	override val datatype = column.datatype
+}
+
+/**
+ * Column references on the SELECT list (but not on the WHERE clause) may contain an optional alias.
+ */
+case class SelectColumnRef(override val tableRef: TableRef, override val column: Table.Column, alias: Option[String]) extends ColumnRef(tableRef, column) {
+
+	val nameForDisplay = alias.getOrElse(column.name)
 	
 	/**
-	 * Is this column ref contained in any of the given table refs?
+	 * Override the default equals so that alias is excluded from comparison
+	 * by delegating to SelectColumnRef. 
+	 * Case classes don't inherit, so have doing it by hand.
 	 */
-	def isContainedIn(tableRefs: Seq[TableRef]):Boolean =
-		tableRefs.map(_.contains(this)).fold(false)(_||_)
+	override def equals(other: Any) = {
+		other match {
+			case scr: SelectColumnRef => ExprColumnRef(tableRef, column).equals(ExprColumnRef(scr.tableRef, scr.column))
+			case ecr: ExprColumnRef =>  ExprColumnRef(tableRef, column).equals(ecr)
+			case _ => false
+		}
+	}
 
 }
