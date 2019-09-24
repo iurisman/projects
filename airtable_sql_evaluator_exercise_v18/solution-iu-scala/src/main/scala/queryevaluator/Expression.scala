@@ -64,14 +64,15 @@ class Expression(val lterm: Expression.Term, val op: Op, val rterm: Expression.T
 	}
 		
 	/**
-	 * Resolve given term over a set column references. Caller guarantees it's resolvable.
+	 * Resolve given term over a set column references and a data tuple.
+	 *  Caller guarantees it's resolvable.
 	 * @returns (datatype, value)
 	 */
-	private[this] def resolveTerm(term: Term, columnRefs: Seq[ColumnRef], tuple: Array[Any]): (Datatype, Any) = {
+	private[this] def resolveTerm(term: Term, columnRefs: Seq[ColumnRef], tuple: Array[Any]): Any = {
 		
 		term match {
-			case colRef: ExprColumnRef => (colRef.column.datatype, tuple(colRef.column.index))
-			case literal: Literal => (literal.datatype, literal.value)
+			case colRef: ExprColumnRef => tuple(colRef.column.index)
+			case literal: Literal => literal.value
 		}
 	}
 	
@@ -137,7 +138,7 @@ class Expression(val lterm: Expression.Term, val op: Op, val rterm: Expression.T
 	 */
 	def apply(tuple: Array[Any], colRefs: Seq[ColumnRef]): Boolean = {		
 
-		//if (arity != 1) throw new RuntimeException(s"Expression of arity ${arity} where 1 was expected") 
+		if (arity != 1) throw new RuntimeException(s"Expression of arity ${arity} where 1 was expected") 
 
 		val List(lrez, rrez) = List(lterm, rterm) map { resolveTerm(_, colRefs, tuple) }
 	

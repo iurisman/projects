@@ -64,29 +64,25 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 		// Build the cartesian product, retaining only tuples which satisfy the WHERE clause
 		val joinedData = mutable.ListBuffer[Array[Any]]()
 		
+		// Monadic expressions that can be applied to this table in isolation
+		// are applied once per incoming tuple.
+		val monads = where.monads(newColRefs)
+
 		for (incomingTuple <- tableRef.table.data) {
 			
-			// Monadic expressions that can be applied to this table in isolation
-			// are applied once per incoming tuple.
-			val monads = where.monads(newColRefs)
 			if (monads.forall(_.apply(incomingTuple, newColRefs))) {
-
-				// The incoming tuple minus the cold columns.
-				val projectedIncomingTuple = {
-					val result = new Array[Any](newMetadata.size)
-					newMetadata.foreach { 
-						cref => result(cref.index) = incomingTuple(cref.origColumnRef.column.index)
-					}
-					result
-				}
 					
-				for (thisTuple <- this.data) {
+				// If this is the first table in, just copy it
+				if (oldMetadata.size == 0) {
+					joinedData += incomingTuple
+				}
+				else for (thisTuple <- this.data) {
 					
 					// Apply dyadic expressions 
 					val dyads = where.dyads(newColRefs, oldMetadata.map(_.origColumnRef))
 					if (dyads.forall(_.apply(incomingTuple, oldMetadata, thisTuple, newColRefs))) {
 	
-						val combinedTuple = thisTuple ++ projectedIncomingTuple
+						val combinedTuple = thisTuple ++ incomingTuple
 						joinedData += combinedTuple
 					}
 				}				
@@ -106,7 +102,7 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 	 */
 	def asJson(ps: PrintStream) {
 		
-		def isHot(column: RsColumn) = selectList.contains(column.origColumnRef)
+		//def isHot(column: RsColumn) = selectList.contains(column.origColumnRef)
 		
 		val header = selectList.columnRefs.map(colRef => Json.arr(colRef.nameForDisplay, colRef.column.datatype))
 		

@@ -24,7 +24,12 @@ class WhereClause(expressions: immutable.List[Expression]) {
 	val columnRefs: Set[ColumnRef] = {
 		val result = mutable.HashSet[ColumnRef]()
 		expressions.foreach { exp => 
-			List(exp.lterm, exp.rterm).foreach { term => term match { case colRef: ExprColumnRef => result += colRef } }
+			List(exp.lterm, exp.rterm).foreach { term =>
+				term match { 
+					case colRef: ExprColumnRef => result += colRef 
+					case _ =>
+				} 
+			}
 		}
 		result.toSet
 	}
@@ -48,7 +53,7 @@ class WhereClause(expressions: immutable.List[Expression]) {
 	def monads(columnRefs: Seq[ColumnRef]): Seq[Expression] = 
 		expressions.filter { expr => 
 			expr.arity == 1 && 
-			List(expr.lterm, expr.rterm).forall(term => columnRefs.contains(term))
+			List(expr.lterm, expr.rterm).filter(term => columnRefs.contains(term)).size > 0
 		}
 
 
@@ -60,6 +65,6 @@ class WhereClause(expressions: immutable.List[Expression]) {
 	def dyads(columnRefs1: Seq[ColumnRef], columnRefs2: Seq[ColumnRef]): Seq[Expression] = 
 		expressions.filter { expr => 
 			expr.arity == 2 && 
-			List(expr.lterm, expr.rterm).forall(term => columnRefs1.contains(term) && columnRefs2.contains(term))
+			List(expr.lterm, expr.rterm).filter(term => columnRefs1.contains(term) || columnRefs2.contains(term)).size > 0
 		}
 }
