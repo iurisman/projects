@@ -167,11 +167,11 @@ class Expression(val lterm: Expression.Term, val op: Op, val rterm: Expression.T
 			val lref= lterm.asInstanceOf[ExprColumnRef]
 			val rref= rterm.asInstanceOf[ExprColumnRef]
 
-			if (colRefs.contains(lref.tableRef.asInstanceOf[ColumnRef]))
+			if (colRefs.contains(lref))
 				// Look for left term in tuple2
 				(tuple2(lref.column.index), tuple1(rsColumns.find(_.origColumnRef == rref).get.index))
 				
-			else if (colRefs.contains(rref.tableRef.asInstanceOf[ColumnRef]))
+			else if (colRefs.contains(rref))
 				// Look for left term in tuple1
 				(tuple1(rsColumns.find(_.origColumnRef == lref).get.index), tuple2(rref.column.index))
 			

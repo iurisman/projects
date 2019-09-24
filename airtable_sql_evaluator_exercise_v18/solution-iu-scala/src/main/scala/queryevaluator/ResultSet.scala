@@ -28,19 +28,20 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 	 */
 	private[this] val metadata = mutable.LinkedHashSet[RsColumn]()
 
-	private[this] val data = mutable.ListBuffer[Array[Any]]()
+	private[this] var data = mutable.ListBuffer[Array[Any]]()
 	
 	/**
 	 * List of all hot columns in this data set. Column is hot if it occurs in select list or the WHERE clause.
 	 * Cold columns are not retained to save space.
 	 */
 	private[this] val hotColumns: immutable.Set[ColumnRef] = {
+		// Use set as an interim datastructure to lose unnecessary dupes.
 		val result = mutable.LinkedHashSet[ColumnRef]()
-  		result ++= selectList.columnRefs
 	   result ++= where.columnRefs.toList
-	   result.toSet
+  		result ++= selectList.columnRefs
+	   immutable.ListSet(result.toSeq:_*)
 	}
-		
+
 	/**
 	 * Join another table with this result set, retaining only hot columns,
 	 * i.e. those on the select list or the WHERE clause.
@@ -78,8 +79,7 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 			
 			// Project the incoming tuple on the new metadata, i.e. lose cold columns.
 			val hotIncomingTuple = new Array[Any](hotMetadata.size)
-			hotMetadata.foreach { rsCol => hotIncomingTuple(rsCol.index) = incomingTuple(rsCol.origColumnRef.column.index) }
-			
+			hotMetadata.foreach { rsCol => hotIncomingTuple(rsCol.index - offset) = incomingTuple(rsCol.origColumnRef.column.index) }
 			
 			if (monads.forall(_.apply(incomingTuple, newColRefs))) {
 					
@@ -92,7 +92,7 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 					// Apply dyadic expressions. Use the incoming tuple because that's the domain or column
 					// references in the WHERE expressions.
 					val dyads = where.dyads(newColRefs, oldMetadata.map(_.origColumnRef))
-					if (dyads.forall(_.apply(incomingTuple, oldMetadata, thisTuple, newColRefs))) {
+					if (dyads.forall(_.apply(thisTuple, oldMetadata, incomingTuple, newColRefs))) {
 						 
 						val combinedTuple = thisTuple ++ hotIncomingTuple
 						joinedData += combinedTuple
@@ -101,7 +101,7 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 			}
 		}
 		
-		data ++=  joinedData
+		data = joinedData
 	}
 
 	/**
@@ -126,8 +126,6 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 			col.origColumnRef.isInstanceOf[SelectColumnRef] &&
 			selectList.contains(col.origColumnRef) 
 		}
-		println("\n*** metadata\n" + metadata.mkString("\n"))
-		println("\n*** projected\n" + projectedMetadata.mkString("\n"))
 
 		val rows = data.map { line =>
 			val jsonCells = projectedMetadata.map { rsColumn =>
@@ -142,7 +140,6 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 	
 		// Composing JSON by hand to take advantage of PrintStream's streaming.
 		// TODO: Perhaps the json lib we use can do it too???
-		println("*** " + rows.size)
 		rows.foreach { row =>
 			ps.append(",\n    ")
 			ps.append(row.toString)

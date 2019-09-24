@@ -179,4 +179,7 @@ class Table private (val name: String, val metadata: immutable.Map[String, Table
 	 */
 	def byName(name: String): Option[Column] = metadata.get(name)
 
+	/**
+	 */
+	override val toString = name
 }

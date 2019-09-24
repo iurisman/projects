@@ -14,6 +14,19 @@ abstract class ColumnRef(val tableRef: TableRef, val column: Table.Column) {
  */
 case class ExprColumnRef(override val tableRef: TableRef, override val column: Table.Column) extends ColumnRef(tableRef, column) with Expression.Term {
 	override val datatype = column.datatype
+	
+	/**
+	 * Override the default equals to match SelectCloumnRef.equals
+	 * Case classes don't inherit, so have to do it by hand.
+	 */
+	override def equals(other: Any) = {
+		other match {
+			case scr: SelectColumnRef => super.equals(ExprColumnRef(scr.tableRef, scr.column))
+			case ecr: ExprColumnRef =>  super.equals(ecr)
+			case _ => false
+		}
+	}
+
 }
 
 /**
@@ -26,7 +39,7 @@ case class SelectColumnRef(override val tableRef: TableRef, override val column:
 	/**
 	 * Override the default equals so that alias is excluded from comparison
 	 * by delegating to SelectColumnRef. 
-	 * Case classes don't inherit, so have doing it by hand.
+	 * Case classes don't inherit, so have to do it by hand.
 	 */
 	override def equals(other: Any) = {
 		other match {
@@ -35,5 +48,7 @@ case class SelectColumnRef(override val tableRef: TableRef, override val column:
 			case _ => false
 		}
 	}
+	
+	override def hashCode = ExprColumnRef(tableRef, column).hashCode
 
 }
