@@ -9,6 +9,9 @@ class SelectList(val columnRefs: immutable.List[SelectColumnRef]) {
 
 	val arity = columnRefs.size
 		
-	def contains(colRef: ColumnRef) = columnRefs.contains(colRef)
+	/**
+	 * Does this set contain given column reference?
+	 */
+	def contains(colRef: ColumnRef): Boolean = columnRefs.contains(colRef)
 	
 }

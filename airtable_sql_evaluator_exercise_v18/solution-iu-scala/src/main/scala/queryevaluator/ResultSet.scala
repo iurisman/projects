@@ -26,18 +26,24 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 	 * Columns in the result set don't have to be unique wrt original column ref.
 	 * I.e. select x as foo, x as foo from bar is legal.  But we maintain the order.
 	 */
-	private[this] var metadata = immutable.List[RsColumn]()
+	private[this] val metadata = mutable.LinkedHashSet[RsColumn]()
 
-	private[this] var data = immutable.List[Array[Any]]()
+	private[this] val data = mutable.ListBuffer[Array[Any]]()
 	
 	/**
 	 * List of all hot columns in this data set. Column is hot if it occurs in select list or the WHERE clause.
 	 * Cold columns are not retained to save space.
 	 */
-	private[this] val hotColumns: List[ColumnRef] = selectList.columnRefs ++ where.columnRefs.toList
-	
+	private[this] val hotColumns: immutable.Set[ColumnRef] = {
+		val result = mutable.LinkedHashSet[ColumnRef]()
+  		result ++= selectList.columnRefs
+	   result ++= where.columnRefs.toList
+	   result.toSet
+	}
+		
 	/**
-	 * Join another table with this result set.
+	 * Join another table with this result set, retaining only hot columns,
+	 * i.e. those on the select list or the WHERE clause.
 	 */
 	def join (tableRef: TableRef) {
 
@@ -45,8 +51,8 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 		// To save space, filter out incoming tuples that wouldn't satisfy the WHERE clause before
 		// computing the cartesian product.
 
-		// Keep old metadata for a bit.
-		val oldMetadata = metadata
+		// Keep a copy of old metadata for a bit.
+		val oldMetadata = metadata.toSet
 
 		// List of hot columns in the incoming table.
 		val newColRefs = hotColumns.filter(_.tableRef == tableRef)
@@ -54,12 +60,12 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 		// Build the new metadata. 
 		val offset = metadata.size
 		var index = offset
-		val newMetadata = mutable.ListBuffer[RsColumn]()
+		val hotMetadata = mutable.ListBuffer[RsColumn]()
 		newColRefs.foreach { cref =>
-			newMetadata += RsColumn(cref, index)
+			hotMetadata += RsColumn(cref, index)
 			index += 1
 		}
-		metadata = metadata ++ newMetadata
+		metadata ++= hotMetadata
 		
 		// Build the cartesian product, retaining only tuples which satisfy the WHERE clause
 		val joinedData = mutable.ListBuffer[Array[Any]]()
@@ -70,32 +76,38 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 
 		for (incomingTuple <- tableRef.table.data) {
 			
+			// Project the incoming tuple on the new metadata, i.e. lose cold columns.
+			val hotIncomingTuple = new Array[Any](hotMetadata.size)
+			hotMetadata.foreach { rsCol => hotIncomingTuple(rsCol.index) = incomingTuple(rsCol.origColumnRef.column.index) }
+			
+			
 			if (monads.forall(_.apply(incomingTuple, newColRefs))) {
 					
 				// If this is the first table in, just copy it
 				if (oldMetadata.size == 0) {
-					joinedData += incomingTuple
+					joinedData += hotIncomingTuple
 				}
 				else for (thisTuple <- this.data) {
 					
-					// Apply dyadic expressions 
+					// Apply dyadic expressions. Use the incoming tuple because that's the domain or column
+					// references in the WHERE expressions.
 					val dyads = where.dyads(newColRefs, oldMetadata.map(_.origColumnRef))
 					if (dyads.forall(_.apply(incomingTuple, oldMetadata, thisTuple, newColRefs))) {
-	
-						val combinedTuple = thisTuple ++ incomingTuple
+						 
+						val combinedTuple = thisTuple ++ hotIncomingTuple
 						joinedData += combinedTuple
 					}
 				}				
 			}
 		}
 		
-		data = joinedData.toList
+		data ++=  joinedData
 	}
 
 	/**
-	 * Restrict this result to select list only.
+	 * TODO: Reduce memory footprint by dropping all columns outside of select list.
 	 */
-	def project() = ???
+	def project() { }
 	
 	/**
 	 * Marshal as JSON into given PrintStream
@@ -109,19 +121,28 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 		ps.append("[\n    ")
 		ps.append(Json.toJson(header).toString)
 
-		val rows = data.map { line => 
-			val jsonCells = line.map { cell => 
-				cell match {
-					case str: String => JsString(str)
-					case int: Int => JsNumber(int)
-				}
-			}
-			Json.toJson(jsonCells)	
+		// The sublist of metadata with only columns on select list.
+		val projectedMetadata = metadata.filter { col => 
+			col.origColumnRef.isInstanceOf[SelectColumnRef] &&
+			selectList.contains(col.origColumnRef) 
 		}
+		println("\n*** metadata\n" + metadata.mkString("\n"))
+		println("\n*** projected\n" + projectedMetadata.mkString("\n"))
+
+		val rows = data.map { line =>
+			val jsonCells = projectedMetadata.map { rsColumn =>
+				line(rsColumn.index) match {
+						case str: String => JsString(str)
+						case int: Int => JsNumber(int)
+					}
+				}
+				Json.toJson(jsonCells)	
+		}
+		
 	
 		// Composing JSON by hand to take advantage of PrintStream's streaming.
 		// TODO: Perhaps the json lib we use can do it too???
-				
+		println("*** " + rows.size)
 		rows.foreach { row =>
 			ps.append(",\n    ")
 			ps.append(row.toString)

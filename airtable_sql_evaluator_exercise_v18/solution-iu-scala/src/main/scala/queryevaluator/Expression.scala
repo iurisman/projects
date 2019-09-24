@@ -68,7 +68,7 @@ class Expression(val lterm: Expression.Term, val op: Op, val rterm: Expression.T
 	 *  Caller guarantees it's resolvable.
 	 * @returns (datatype, value)
 	 */
-	private[this] def resolveTerm(term: Term, columnRefs: Seq[ColumnRef], tuple: Array[Any]): Any = {
+	private[this] def resolveTerm(term: Term, columnRefs: Set[ColumnRef], tuple: Array[Any]): Any = {
 		
 		term match {
 			case colRef: ExprColumnRef => tuple(colRef.column.index)
@@ -136,7 +136,7 @@ class Expression(val lterm: Expression.Term, val op: Op, val rterm: Expression.T
 	 * Apply this monadic expression. Caller ensures it's resolvable.
 	 * The tuple is coming from a real table, i.e. no index translation.
 	 */
-	def apply(tuple: Array[Any], colRefs: Seq[ColumnRef]): Boolean = {		
+	def apply(tuple: Array[Any], colRefs: Set[ColumnRef]): Boolean = {		
 
 		if (arity != 1) throw new RuntimeException(s"Expression of arity ${arity} where 1 was expected") 
 
@@ -157,8 +157,8 @@ class Expression(val lterm: Expression.Term, val op: Op, val rterm: Expression.T
 	 * @tuple2 is coming from a real table, i.e. no index translation
 	 */
 	def apply(
-			tuple1: Array[Any], rsColumns: Seq[RsColumn], 
-			tuple2: Array[Any], colRefs: Seq[ColumnRef]): Boolean = {
+			tuple1: Array[Any], rsColumns: Set[RsColumn], 
+			tuple2: Array[Any], colRefs: Set[ColumnRef]): Boolean = {
 
 		if (arity != 2) throw new RuntimeException(s"Expression of arity ${arity} where 2 was expected") 
 
@@ -167,11 +167,11 @@ class Expression(val lterm: Expression.Term, val op: Op, val rterm: Expression.T
 			val lref= lterm.asInstanceOf[ExprColumnRef]
 			val rref= rterm.asInstanceOf[ExprColumnRef]
 
-			if (colRefs.contains(lref.tableRef))
+			if (colRefs.contains(lref.tableRef.asInstanceOf[ColumnRef]))
 				// Look for left term in tuple2
 				(tuple2(lref.column.index), tuple1(rsColumns.find(_.origColumnRef == rref).get.index))
 				
-			else if (colRefs.contains(rref.tableRef))
+			else if (colRefs.contains(rref.tableRef.asInstanceOf[ColumnRef]))
 				// Look for left term in tuple1
 				(tuple1(rsColumns.find(_.origColumnRef == lref).get.index), tuple2(rref.column.index))
 			

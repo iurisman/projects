@@ -6,17 +6,7 @@ import Datatype._
 /**
  * Encapsulates WHERE clause of a query.
  */
-class WhereClause(expressions: immutable.List[Expression]) {
-
-	/**
-	 * Is any of the expressions references this column ref?
-	 *
-	def contains(columnRef: ColumnRef) = {
-		expressions.map { exp =>
-			exp.lterm.isInstanceOf[ColumnRef] && exp.lterm.asInstanceOf[ColumnRef] == columnRef ||
-			exp.rterm.isInstanceOf[ColumnRef] && exp.rterm.asInstanceOf[ColumnRef] == columnRef		
-		}.fold(false)(_||_)
-	}*/
+class WhereClause(expressions: immutable.Set[Expression]) {
 		
 	/**
 	 * Unique column refs, i.e. if a column ref is used multiple times, include it only once.
@@ -50,10 +40,13 @@ class WhereClause(expressions: immutable.List[Expression]) {
 	 *  • one term is a literal and the other a column in the given table.
 	 *  • both terms are a column in the given table.
 	 */
-	def monads(columnRefs: Seq[ColumnRef]): Seq[Expression] = 
+	def monads(columnRefs: Set[ColumnRef]): Set[Expression] = 
 		expressions.filter { expr => 
 			expr.arity == 1 && 
-			List(expr.lterm, expr.rterm).filter(term => columnRefs.contains(term)).size > 0
+			List(expr.lterm, expr.rterm).filter {
+				case ref: ColumnRef => columnRefs.contains(ref)
+				case _ => false
+			}.size > 0
 		}
 
 
@@ -62,9 +55,11 @@ class WhereClause(expressions: immutable.List[Expression]) {
 	 * • both sides are columns, in two given tables.
 	 * Order of parameters does not matter, but they must be different.
 	 */
-	def dyads(columnRefs1: Seq[ColumnRef], columnRefs2: Seq[ColumnRef]): Seq[Expression] = 
+	def dyads(columnRefs1: Set[ColumnRef], columnRefs2: Set[ColumnRef]): Set[Expression] = 
 		expressions.filter { expr => 
 			expr.arity == 2 && 
-			List(expr.lterm, expr.rterm).filter(term => columnRefs1.contains(term) || columnRefs2.contains(term)).size > 0
+			List(expr.lterm, expr.rterm).filter { term => 
+				columnRefs1.contains(term.asInstanceOf[ColumnRef]) || columnRefs2.contains(term.asInstanceOf[ColumnRef])
+			}.size > 0
 		}
 }

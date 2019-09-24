@@ -109,7 +109,7 @@ object Query {
 			val rterm = parseTerm((expr \ "right").get, fromClause)
 			expressions += new Expression(lterm, op, rterm)
 		}
-		val whereClause = new WhereClause(expressions.toList)
+		val whereClause = new WhereClause(expressions.toSet)
 		
 		new Query(selectList, fromClause, whereClause)
 	}
@@ -133,7 +133,7 @@ class Query private (selectList: SelectList, from: FromClause, where: WhereClaus
 			// resolvable in that table.
 			from.tables.foreach { tableRef => result.join(tableRef) }
 		}
-		
+		result.project()
 		result
 	}
 }
