@@ -29,3 +29,4 @@ object Op {
 	val GT = new Op(">")
 	val NE = new Op("!=")
 }
+

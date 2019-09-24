@@ -32,16 +32,17 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 	
 	/**
 	 * List of all hot columns in this data set. Column is hot if it occurs in select list or the WHERE clause.
-	 * Cold columns are not retained to save space.
+	 * Cold columns are not retained to save space. If the same logical column is referenced on both select list
+	 * and an expression, retain one, but favor the select list to retain the optional column alias.
 	 */
 	private[this] val hotColumns: immutable.Set[ColumnRef] = {
 		// Use set as an interim datastructure to lose unnecessary dupes.
 		val result = mutable.LinkedHashSet[ColumnRef]()
-	   result ++= where.columnRefs.toList
   		result ++= selectList.columnRefs
+	   result ++= where.columnRefs
 	   immutable.ListSet(result.toSeq:_*)
 	}
-
+	
 	/**
 	 * Join another table with this result set, retaining only hot columns,
 	 * i.e. those on the select list or the WHERE clause.
@@ -61,12 +62,12 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 		// Build the new metadata. 
 		val offset = metadata.size
 		var index = offset
-		val hotMetadata = mutable.ListBuffer[RsColumn]()
+		val newMetadata = mutable.ListBuffer[RsColumn]()
 		newColRefs.foreach { cref =>
-			hotMetadata += RsColumn(cref, index)
+			newMetadata += RsColumn(cref, index)
 			index += 1
 		}
-		metadata ++= hotMetadata
+		metadata ++= newMetadata
 		
 		// Build the cartesian product, retaining only tuples which satisfy the WHERE clause
 		val joinedData = mutable.ListBuffer[Array[Any]]()
@@ -74,12 +75,14 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 		// Monadic expressions that can be applied to this table in isolation
 		// are applied once per incoming tuple.
 		val monads = where.monads(newColRefs)
-
+		
 		for (incomingTuple <- tableRef.table.data) {
 			
 			// Project the incoming tuple on the new metadata, i.e. lose cold columns.
-			val hotIncomingTuple = new Array[Any](hotMetadata.size)
-			hotMetadata.foreach { rsCol => hotIncomingTuple(rsCol.index - offset) = incomingTuple(rsCol.origColumnRef.column.index) }
+			val hotIncomingTuple = new Array[Any](newMetadata.size)
+			newMetadata.foreach { rsCol => 
+				hotIncomingTuple(rsCol.index - offset) = incomingTuple(rsCol.origColumnRef.column.index) 
+			}
 			
 			if (monads.forall(_.apply(incomingTuple, newColRefs))) {
 					
@@ -87,15 +90,19 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 				if (oldMetadata.size == 0) {
 					joinedData += hotIncomingTuple
 				}
-				else for (thisTuple <- this.data) {
+				else {
 					
-					// Apply dyadic expressions. Use the incoming tuple because that's the domain or column
-					// references in the WHERE expressions.
 					val dyads = where.dyads(newColRefs, oldMetadata.map(_.origColumnRef))
-					if (dyads.forall(_.apply(thisTuple, oldMetadata, incomingTuple, newColRefs))) {
-						 
-						val combinedTuple = thisTuple ++ hotIncomingTuple
-						joinedData += combinedTuple
+
+					for (thisTuple <- this.data) {
+						
+						// Apply dyadic expressions. Use the incoming tuple because that's the domain or column
+						// references in the WHERE expressions.
+						if (dyads.forall(_.apply(thisTuple, oldMetadata, incomingTuple, newColRefs))) {
+							 
+							val combinedTuple = thisTuple ++ hotIncomingTuple
+							joinedData += combinedTuple
+						}
 					}
 				}				
 			}
@@ -103,18 +110,11 @@ class ResultSet(selectList: SelectList, where: WhereClause) {
 		
 		data = joinedData
 	}
-
-	/**
-	 * TODO: Reduce memory footprint by dropping all columns outside of select list.
-	 */
-	def project() { }
 	
 	/**
 	 * Marshal as JSON into given PrintStream
 	 */
 	def asJson(ps: PrintStream) {
-		
-		//def isHot(column: RsColumn) = selectList.contains(column.origColumnRef)
 		
 		val header = selectList.columnRefs.map(colRef => Json.arr(colRef.nameForDisplay, colRef.column.datatype))
 		

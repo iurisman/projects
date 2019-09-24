@@ -165,7 +165,7 @@ class Expression(val lterm: Expression.Term, val op: Op, val rterm: Expression.T
 		val (lrez, rrez) = {
 			
 			val lref= lterm.asInstanceOf[ExprColumnRef]
-			val rref= rterm.asInstanceOf[ExprColumnRef]
+			val rref= rterm.asInstanceOf[ExprColumnRef]	
 
 			if (colRefs.contains(lref))
 				// Look for left term in tuple2

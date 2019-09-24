@@ -12,6 +12,7 @@ import play.api.libs.json.JsString
 import play.api.libs.json.JsValue
 import play.api.libs.json.Json
 
+
 import Expression._
 
 /**
@@ -31,7 +32,7 @@ object Query {
 			val colName = (col \ "name").as[String]
 			val optTableAlias = (col \ "table").asOpt[String]
 			val (tableRef, column) = from.lookupColumn(colName, optTableAlias)
-			ExprColumnRef(tableRef, column)
+			new ExprColumnRef(tableRef, column)
 				
 		case None =>
 			// This is a literal.
@@ -95,7 +96,7 @@ object Query {
 			// Cross reference this information with the FROM clause
 			val (tableRef, column) = fromClause.lookupColumn(colName, optTableAlias)
 						
-			colRefs +=  SelectColumnRef(tableRef, column, optColAlias)
+			colRefs +=  new SelectColumnRef(tableRef, column, optColAlias)
 		}
 		val selectList = new SelectList(colRefs.toList)
 		
@@ -133,7 +134,7 @@ class Query private (selectList: SelectList, from: FromClause, where: WhereClaus
 			// resolvable in that table.
 			from.tables.foreach { tableRef => result.join(tableRef) }
 		}
-		result.project()
+
 		result
 	}
 }

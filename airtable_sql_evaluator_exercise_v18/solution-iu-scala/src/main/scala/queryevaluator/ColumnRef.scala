@@ -3,52 +3,43 @@ package queryevaluator
 /**
  * Base column ref is applicable to both SELECT list and the WHERE expressions.
  */
-abstract class ColumnRef(val tableRef: TableRef, val column: Table.Column) {
+class ColumnRef(val tableRef: TableRef, val column: Table.Column) {
 	
 	if (tableRef.table != column.table) 
 		throw new RuntimeException("Internal Error: Inconsistent column reference")
+
+	private val logicalName = tableRef.alias.getOrElse(tableRef.table.name) + "." + column.name
+	
+	override def equals(other: Any) = {
+		other match {
+			case otherRef: ColumnRef => otherRef.logicalName == this.logicalName
+			case _ => false
+		}
+	}
+	
+	override def hashCode() = logicalName.hashCode
+	
+	override def toString() = getClass.getSimpleName + "(" + logicalName + ")"
+
 }
 
 /**
  * How a column is referenced by a WHERE expression.
  */
-case class ExprColumnRef(override val tableRef: TableRef, override val column: Table.Column) extends ColumnRef(tableRef, column) with Expression.Term {
-	override val datatype = column.datatype
+class ExprColumnRef(override val tableRef: TableRef, override val column: Table.Column) 
+	extends ColumnRef(tableRef, column) with Expression.Term {
 	
-	/**
-	 * Override the default equals to match SelectCloumnRef.equals
-	 * Case classes don't inherit, so have to do it by hand.
-	 */
-	override def equals(other: Any) = {
-		other match {
-			case scr: SelectColumnRef => super.equals(ExprColumnRef(scr.tableRef, scr.column))
-			case ecr: ExprColumnRef =>  super.equals(ecr)
-			case _ => false
-		}
-	}
+	override val datatype = column.datatype
 
 }
 
 /**
  * Column references on the SELECT list (but not on the WHERE clause) may contain an optional alias.
  */
-case class SelectColumnRef(override val tableRef: TableRef, override val column: Table.Column, alias: Option[String]) extends ColumnRef(tableRef, column) {
+class SelectColumnRef(override val tableRef: TableRef, override val column: Table.Column, alias: Option[String]) 
+	extends ColumnRef(tableRef, column) {
 
 	val nameForDisplay = alias.getOrElse(column.name)
 	
-	/**
-	 * Override the default equals so that alias is excluded from comparison
-	 * by delegating to SelectColumnRef. 
-	 * Case classes don't inherit, so have to do it by hand.
-	 */
-	override def equals(other: Any) = {
-		other match {
-			case scr: SelectColumnRef => ExprColumnRef(tableRef, column).equals(ExprColumnRef(scr.tableRef, scr.column))
-			case ecr: ExprColumnRef =>  ExprColumnRef(tableRef, column).equals(ecr)
-			case _ => false
-		}
-	}
-	
-	override def hashCode = ExprColumnRef(tableRef, column).hashCode
-
+	override def toString = super.toString() + "(" + alias.getOrElse("") + ")"
 }

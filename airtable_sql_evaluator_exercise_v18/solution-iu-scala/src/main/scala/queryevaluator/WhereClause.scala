@@ -56,10 +56,13 @@ class WhereClause(expressions: immutable.Set[Expression]) {
 	 * Order of parameters does not matter, but they must be different.
 	 */
 	def dyads(columnRefs1: Set[ColumnRef], columnRefs2: Set[ColumnRef]): Set[Expression] = 
-		expressions.filter { expr => 
-			expr.arity == 2 && 
-			List(expr.lterm, expr.rterm).filter { term => 
-				columnRefs1.contains(term.asInstanceOf[ColumnRef]) || columnRefs2.contains(term.asInstanceOf[ColumnRef])
-			}.size > 0
+
+		expressions
+		.filter ( _.arity == 2)
+		.filter { expr => 
+			val lterm = expr.lterm.asInstanceOf[ColumnRef]
+			val rterm = expr.rterm.asInstanceOf[ColumnRef]
+			columnRefs1.contains(lterm) && columnRefs2.contains(rterm) ||
+			columnRefs1.contains(rterm) && columnRefs2.contains(lterm)
 		}
 }

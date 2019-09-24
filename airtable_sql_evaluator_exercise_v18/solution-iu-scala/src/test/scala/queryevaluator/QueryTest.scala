@@ -16,7 +16,7 @@ class QueryTest extends WordSpec with MustMatchers {
 	}
 	
 	"Query" must {
-/*
+
 		"detect ambiguous column" in {
 			
 			coolIntercept {
@@ -86,21 +86,19 @@ class QueryTest extends WordSpec with MustMatchers {
 			rs.asJson
 			Json.stringify(Json.parse(rs.asJsonString)) mustBe """[[["name","String"],["population","Integer"]],["Tokyo",13513],["Kanagawa",9127],["Osaka",8838]]"""		
 		}
-*/
+
 		"load and execute cities-2.sql.json" in {
 			
 			val rs = Query.fromFile("../examples/cities-2.sql.json").execute
 			rs.asJson
 			Json.stringify(Json.parse(rs.asJsonString)) mustBe """[[["name","String"],["country","String"],["population","Integer"]],["Washington DC","USA",681],["Ottawa","Canada",934],["Tokyo","Japan",13513]]"""
 		}
-/*
+
 		"load and execute cities-3.sql.json" in {
 			
 			val rs = Query.fromFile("../examples/cities-3.sql.json").execute
 			rs.asJson
-			
+			println(Json.stringify(Json.parse(rs.asJsonString)))
 		}
-		* 
-		*/
 	}
 }
