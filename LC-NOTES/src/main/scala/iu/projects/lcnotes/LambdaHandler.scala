@@ -64,6 +64,8 @@ class LambdaHandler extends RequestHandler[ScheduledEvent, String] {
 			Email.sendText(emailAddress, emailAddress, emailSubject.format(notes.size, count, event.getTime().toString()), "")
 		}
 
-		emailSubject.format(notes.size, count, event.getTime().toString())
+		val response = emailSubject.format(notes.size, count, event.getTime().toString())
+		println(response)
+		response
 	}
 }
