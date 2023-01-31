@@ -10,8 +10,12 @@ lazy val root = project
 
         libraryDependencies += "com.amazonaws" % "aws-lambda-java-core" % "1.2.2",
         libraryDependencies += "com.amazonaws" % "aws-lambda-java-events" % "3.11.0",
-        libraryDependencies +=  "com.softwaremill.sttp.client3" %% "core" % "3.8.9",
         // "provided" is needed to resolve a conflict during merging of dependent libs
-        libraryDependencies += "com.amazonaws" % "aws-java-sdk-ses" % "1.12.395" % "provided",
-        libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.15"
+        libraryDependencies += "com.amazonaws" % "aws-java-sdk-ses" % "1.12.395",
+        libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.15" % Test
   )
+
+assembly / assemblyMergeStrategy := {
+        case PathList("META-INF", _*) => MergeStrategy.discard
+        case _                        => MergeStrategy.first
+}

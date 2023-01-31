@@ -1,11 +1,14 @@
 package urisman.wp.ping
 
 import org.scalatest.wordspec.AnyWordSpec
-import com.amazonaws.services.lambda.runtime.Context
+import com.amazonaws.services.lambda.runtime.{Context, LambdaLogger}
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent
-import java.time.LocalDateTime
+import org.scalatest.matchers.must.Matchers
 
-class LambdaHandlerTest extends AnyWordSpec {
+import java.time.LocalDateTime
+import java.util.logging.Logger
+
+class LambdaHandlerTest extends AnyWordSpec with Matchers {
   val context: Context = new Context {
     override def getAwsRequestId = "?"
     override def getLogGroupName = "?"
@@ -17,16 +20,16 @@ class LambdaHandlerTest extends AnyWordSpec {
     override def getClientContext = null
     override def getRemainingTimeInMillis = -1
     override def getMemoryLimitInMB = -1
-    override def getLogger = null
+    override def getLogger = new LambdaLogger {
+      override def log(message: String): Unit = println(message)
+      override def log(message: Array[Byte]): Unit = ???
+    }
   }
-
-  val event = new ScheduledEvent()
-  //event.setTime(new LocalDateTime())
 
   "LambdaHandler" should {
     "succeed" in {
-      val foo = new LambdaHandler().handleRequest(event, context)
-      println(foo);
+      val resp = new LambdaHandler().handleRequest(new ScheduledEvent(), context)
+      resp mustBe "urisman.net: OK"
     }
   }
 }

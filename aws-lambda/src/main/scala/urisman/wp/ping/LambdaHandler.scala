@@ -8,19 +8,19 @@ import scala.io.Source
 
 class LambdaHandler extends RequestHandler[ScheduledEvent, String] {
 	
-	val emailAddress = "igor.urisman@gmail.com"
-	val emailSubject = "urisman.net: %s"
+	private val to = "igor.urisman@gmail.com"
+	private def subject(status: Int): String = status match {
+		case 200 => "urisman.net: OK"
+		case _@code => s"*** urisman.net: $code ***"
+	}
 
 	def handleRequest(event: ScheduledEvent, context: Context): String = {
-
 		val url = new URL("https://www.urisman.net/")
-//		val resp = Source.fromURL(url).getLines.reduceLeft(_+_);
-//		println(resp)
-//		resp
-
-
 		val conn = url.openConnection().asInstanceOf[HttpURLConnection]
 		conn.setRequestMethod("GET")
-		conn.getResponseMessage
+		val subj = subject(conn.getResponseCode)
+		Email.sendText(to = to, from = to, subject = subj, body = "")
+		context.getLogger.log(subj)
+		subj
 	}
 }
